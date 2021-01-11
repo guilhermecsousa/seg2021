@@ -5,6 +5,9 @@ import random
 import string
 import pickle
 import crypt
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 
 class Player:
   
@@ -27,6 +30,25 @@ class Player:
         while 1:
             print("\n-----------",self.name,"---------------")
             data = pickle.loads(self.s.recv(4096))
+
+            with open("private_key.pem", "rb") as key_file:
+                private_key = serialization.load_pem_private_key(
+                    key_file.read(),
+                    bytes( "password", "utf-8"),
+                    backend = default_backend()
+                )
+            print("########################################\n")
+            print(data)
+            print("\n########################################")
+            # aux = private_key.decrypt(
+            #     data['piece'],
+            #     padding.OAEP(
+            #         padding.MGF1( hashes.SHA256() ),
+            #         hashes.SHA256(), None )
+            # )
+            # print(aux)
+            
+
             if 'piece' in data:
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)

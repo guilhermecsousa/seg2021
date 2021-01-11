@@ -8,25 +8,51 @@ import crypt
 import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 
-# cipherDeck = []
+#  cipherDeck = []
           
-        
-#         key = os.urandom(16)
-#         iv = os.urandom(16)
-#         for i in range(0,len(self.game.deck.deck)):
-#             cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
-#             encryptor = cipher.encryptor()
-#             ct = encryptor.update(pickle.dumps(self.game.deck.deck[i])) + encryptor.finalize()
-#             cipherDeck.append(ct)
-#         self.game.deck = cipherDeck
-#         #for i in range(0,len(cipherDeck)):
-#         cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
-#         decryptor = cipher.decryptor()
-#         temp = decryptor.update(cipherDeck[3]) + decryptor.finalize()
-#         print(pickle.loads(temp))
+#  key = os.urandom(16)
+#  iv = os.urandom(16)
+#  for i in range(0,len(self.game.deck.deck)):
+#      cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
+#      encryptor = cipher.encryptor()
+#      ct = encryptor.update(pickle.dumps(self.game.deck.deck[i])) + encryptor.finalize()
+#      cipherDeck.append(ct)
+#        
+#  for i in range(0,len(cipherDeck)):
+#      cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
+#      decryptor = cipher.decryptor()
+#      temp = decryptor.update(cipherDeck[3]) + decryptor.finalize()
+#      print(pickle.loads(temp))
 
 class Server:
+
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=1024,
+        backend=default_backend()
+    )
+
+    pwd = "password"
+
+    pempriv = private_key.private_bytes(
+         encoding = serialization.Encoding.PEM,
+         format = serialization.PrivateFormat.PKCS8,
+         encryption_algorithm = serialization.BestAvailableEncryption( bytes(pwd, "utf-8"))
+    )
+
+    with open('private_key.pem', 'wb') as f:
+        f.write(pempriv)
+
+    # pempub = public_key.public_bytes(
+    #     encoding = serialization.Encoding.PEM,
+    #     format = serialization.PublicFormat.SubjectPublicKeyInfo
+    # )
+
+    # with open('public_key.pem', 'wb') as f:
+    #     f.write(pempub)
 
     def __init__(self):
     
@@ -79,6 +105,44 @@ class Server:
     def startGame(self):
         
         print("deck ->",self.deck,"\n")
+
+        with open("private_key.pem", "rb") as key_file:
+            priv_key = serialization.load_pem_private_key(
+                key_file.read(), 
+                bytes( "password", "utf-8"),
+                default_backend()
+            )
+
+        pub_key = priv_key.public_key()
+
+        # maxLen = (pub_key_size // 8) - 2 * hashes.SHA256.digest_size - 2 
+        # print(maxLen)
+        
+        cipherDeck = []
+        # key = os.urandom(16)
+        # iv = os.urandom(16)
+        # for i in range(0,len(self.deck)):
+        #     cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
+        #     encryptor = cipher.encryptor()
+        #     ct = encryptor.update(pickle.dumps(self.deck[i])) + encryptor.finalize()
+        #     cipherDeck.append(ct)
+        
+        for i in range(0,len(self.deck)):
+            ciphertext = pub_key.encrypt(
+                pickle.dumps(i),
+                padding.OAEP(
+                    padding.MGF1(
+                        hashes.SHA256()
+                    ),
+                    hashes.SHA256(),
+                    None
+                )
+            )
+            
+            cipherDeck.append(ciphertext)
+
+        self.deck = cipherDeck    
+            
         input("Press a key to START")
         
         for i in range(self.startpieces): 
