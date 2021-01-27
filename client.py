@@ -1,3 +1,7 @@
+import socket
+import time
+import sys
+import random
 import random
 import string
 import socket
@@ -10,6 +14,7 @@ import base64
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Random import get_random_bytes
+
 class Player:
   
     def __init__(self):
@@ -31,20 +36,16 @@ class Player:
         while 1:
             print("\n-----------",self.name,"---------------")
             data = pickle.loads(self.s.recv(4096))
-            # if 'isitok' in data:
-            #     print("It is OK!")
-
-
             if 'piece' in data:
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
-                #print(data['piece'])
+
                 privateKey = RSA.import_key(open("private.pem").read())
                 decryptor = PKCS1_OAEP.new(privateKey)
                 decrypted = decryptor.decrypt(data['piece'])
                 print('Decrypted:', pickle.loads(decrypted))
-                
-                self.hand+= [pickle.loads(decrypted)]
+
+                self.hand+=[pickle.loads(decrypted)]
                 print("Received a piece.")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
