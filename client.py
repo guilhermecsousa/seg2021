@@ -1,14 +1,15 @@
-import socket
-import time
-import sys
 import random
 import string
+import socket
+import sys
+import time
 import pickle
 import crypt
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization, hashes
-
+import os
+import base64
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Random import get_random_bytes
 class Player:
   
     def __init__(self):
@@ -30,29 +31,20 @@ class Player:
         while 1:
             print("\n-----------",self.name,"---------------")
             data = pickle.loads(self.s.recv(4096))
+            # if 'isitok' in data:
+            #     print("It is OK!")
 
-            with open("private_key.pem", "rb") as key_file:
-                private_key = serialization.load_pem_private_key(
-                    key_file.read(),
-                    bytes( "password", "utf-8"),
-                    backend = default_backend()
-                )
-            print("########################################\n")
-            print(data)
-            print("\n########################################")
-            # aux = private_key.decrypt(
-            #     data['piece'],
-            #     padding.OAEP(
-            #         padding.MGF1( hashes.SHA256() ),
-            #         hashes.SHA256(), None )
-            # )
-            # print(aux)
-            
 
             if 'piece' in data:
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
-                self.hand+=[data['piece']]
+                #print(data['piece'])
+                privateKey = RSA.import_key(open("private.pem").read())
+                decryptor = PKCS1_OAEP.new(privateKey)
+                decrypted = decryptor.decrypt(data['piece'])
+                print('Decrypted:', pickle.loads(decrypted))
+                
+                self.hand+= [pickle.loads(decrypted)]
                 print("Received a piece.")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)

@@ -6,10 +6,9 @@ import time
 import pickle
 import crypt
 import os
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization, hashes
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Random import get_random_bytes
 
 #  cipherDeck = []
           
@@ -26,25 +25,24 @@ from cryptography.hazmat.primitives import serialization, hashes
 #      decryptor = cipher.decryptor()
 #      temp = decryptor.update(cipherDeck[3]) + decryptor.finalize()
 #      print(pickle.loads(temp))
+                
+def createKey(): 
+    key = RSA.generate(2048)
+    private_key = key.export_key()
+    file_out = open("private.pem", "wb")
+    file_out.write(private_key)
+    file_out.close()
+
+    public_key = key.publickey().export_key()
+    file_out = open("public.pem", "wb")
+    file_out.write(public_key)
+    file_out.close()
+
 
 class Server:
 
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=1024,
-        backend=default_backend()
-    )
-
-    pwd = "password"
-
-    pempriv = private_key.private_bytes(
-         encoding = serialization.Encoding.PEM,
-         format = serialization.PrivateFormat.PKCS8,
-         encryption_algorithm = serialization.BestAvailableEncryption( bytes(pwd, "utf-8"))
-    )
-
-    with open('private_key.pem', 'wb') as f:
-        f.write(pempriv)
+    createKey()
+    
 
     # pempub = public_key.public_bytes(
     #     encoding = serialization.Encoding.PEM,
@@ -70,8 +68,18 @@ class Server:
         for i in range(7):
             for j in range(i,7):
                 self.deck += [[i,j]]
-                
+        print(self.deck)
+        cipherDeck = []
+        for i in range(0,len(self.deck)):
+            msg = pickle.dumps(self.deck[i])
+            pubKey = RSA.import_key(open("public.pem").read())
+            encryptor = PKCS1_OAEP.new(pubKey)
+            encrypted = encryptor.encrypt(msg)
+            cipherDeck.append(encrypted)
+        print(cipherDeck)
+        self.deck = cipherDeck             
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
         s.bind(('localhost', 25565))
         
         print("Waiting for players...\n")
@@ -101,48 +109,16 @@ class Server:
             msg = {'nopiece': 'nopiece'}
             self.conn[player].sendall(pickle.dumps(msg))
             print("No more pieces.")
+
+    def isItOk(self,player):
+        msg = {'isitok': 'isitok'}
+        self.conn[player].sendall(pickle.dumps(msg))
+        print("Is it ok?")
         
     def startGame(self):
         
         print("deck ->",self.deck,"\n")
-
-        with open("private_key.pem", "rb") as key_file:
-            priv_key = serialization.load_pem_private_key(
-                key_file.read(), 
-                bytes( "password", "utf-8"),
-                default_backend()
-            )
-
-        pub_key = priv_key.public_key()
-
-        # maxLen = (pub_key_size // 8) - 2 * hashes.SHA256.digest_size - 2 
-        # print(maxLen)
-        
-        cipherDeck = []
-        # key = os.urandom(16)
-        # iv = os.urandom(16)
-        # for i in range(0,len(self.deck)):
-        #     cipher = Cipher(algorithms.AES(key), modes.CTR(iv), backend=default_backend())
-        #     encryptor = cipher.encryptor()
-        #     ct = encryptor.update(pickle.dumps(self.deck[i])) + encryptor.finalize()
-        #     cipherDeck.append(ct)
-        
-        for i in range(0,len(self.deck)):
-            ciphertext = pub_key.encrypt(
-                pickle.dumps(i),
-                padding.OAEP(
-                    padding.MGF1(
-                        hashes.SHA256()
-                    ),
-                    hashes.SHA256(),
-                    None
-                )
-            )
-            
-            cipherDeck.append(ciphertext)
-
-        self.deck = cipherDeck    
-            
+             
         input("Press a key to START")
         
         for i in range(self.startpieces): 
@@ -169,7 +145,7 @@ class Server:
                 msg={'play': self.table}
                 self.conn[player].sendall(pickle.dumps(msg))
                 data = pickle.loads(self.conn[player].recv(4096))
-                
+                #print("y tho")
                 if 'piece' in data:
                     self.givePiece(player)
                     data = pickle.loads(self.conn[player].recv(4096))
@@ -179,7 +155,12 @@ class Server:
                         data = pickle.loads(self.conn[player].recv(4096))
                     print("Deck ->",self.deck)
                 if 'played' in data:
+                    #print(len(self.table))
                     self.table=data['played']
+                    #print("AAAAAAAAAAA")
+                    #self.isItOk(player)
+                    #print("BBBBBBBBBBBBBB")
+                    #data = pickle.loads(self.conn[player].recv(4096))
                     print("Piece played.")
                     print("Table ->",self.table)    
                 if 'pass' in data:
@@ -198,6 +179,7 @@ class Server:
                 print("Game Ended")
                 running = 0
                 exit()
+
             
 sv = Server()
 
