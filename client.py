@@ -9,6 +9,7 @@ import collections
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import pickle
+from cryptography.fernet import Fernet
 
 class Player:
   
@@ -18,6 +19,7 @@ class Player:
         self.table=[]
         self.cheating = 100 #0-100%
         self.played=[]
+        self.serverkey = None
 
         if len(sys.argv) >= 2:
             self.name = sys.argv[1]
@@ -25,7 +27,7 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25565))
+        self.s.connect(('localhost', 25567))
         msg = {"name": self.name}
         self.s.sendall(pickle.dumps(msg))
         print("You connected with name",self.name)
@@ -35,6 +37,9 @@ class Player:
             print("Esperando")
             data = pickle.loads(self.s.recv(4096))
             print(data)
+            if 'key' in data:
+                self.serverkey = data['key']
+
             print("Recebi")
             if 'piece' in data:
                 print("Entrei")
@@ -42,10 +47,19 @@ class Player:
                 print("Table ->",self.table)
 
                 print("Entra decrypt")
-                privateKey = RSA.import_key(open("private.pem").read())
-                decryptor = PKCS1_OAEP.new(privateKey)
-                decrypted = decryptor.decrypt(data['piece'])
-                print('Decrypted:', pickle.loads(decrypted))
+                # with open('secure.pem', 'rb') as my_private_key:
+                #     key = my_private_key.read()
+        
+                f = Fernet(self.serverkey)
+                #cleartext = base64.urlsafe_ b64decode()
+                cleartext = f.decrypt(data['piece'])
+                cleartext = cleartext.decode()
+                print(cleartext)
+                
+                # privateKey = RSA.import_key(open("private.pem").read())
+                # decryptor = PKCS1_OAEP.new(privateKey)
+                # decrypted = decryptor.decrypt(data['piece'])
+                print('Decrypted:', pickle.loads(cleartext))
                 
                 self.hand+= [pickle.loads(decrypted)]
 

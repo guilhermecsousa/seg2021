@@ -6,13 +6,15 @@ import time
 import pickle
 import crypt
 import numpy as np
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
-import pickle
-
+import os
+import hashlib
+from Crypto import Random
+from Crypto.Cipher import AES
+from base64 import b64encode, b64decode
+from cryptography.fernet import Fernet
 
 class Server:
-
+    
     def __init__(self):
     
         self.deck = []    
@@ -22,23 +24,32 @@ class Server:
         self.table = []
         self.conn = {}
         self.addr = {}
+        self.key = Fernet.generate_key()
+        
+        # symmetric key generation using the Fernet cipher
+        
+        # with open('secure.pem', 'wb') as new_key_file:
+        #     new_key_file.write(key)
 
         if len(sys.argv) >= 2:
             self.nplayers = sys.argv[1]
 
+        # cifra das peças
         for i in range(7):
             for j in range(i,7):
-                msg = pickle.dumps([i,j])
-                pubKey = RSA.import_key(open("public.pem").read())
-                encryptor = PKCS1_OAEP.new(pubKey)
-                encrypted = encryptor.encrypt(msg)
+                msg = [i,j]
+                print(msg)
+                msg = str(msg).encode()
+                f = Fernet(self.key)
+                encrypted = f.encrypt(msg)
+                encrypted = base64.urlsafe_b64encode(encrypted)
+            
                 self.deck += [encrypted]
 
-        #print(self.deck)
-            
-                
+        print(self.deck)
+        
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25565))
+        self.s.bind(('localhost', 25567))
         
         print("Waiting for players...\n")
         
@@ -76,6 +87,10 @@ class Server:
         for i in range(self.startpieces): 
             for player in self.players:
                 self.givePiece(player)
+                
+                msg = {"key": self.key}
+                self.conn[player].sendall(pickle.dumps(msg))
+
                 time.sleep(0.2)
                 
         self.playGame()
