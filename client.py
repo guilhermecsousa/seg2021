@@ -10,10 +10,19 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import pickle
 
+
+
 class Player:
-  
+    
+    
+
     def __init__(self):
     
+        key = RSA.generate(4096)
+        private_key = key.export_key()
+        public_key = key.publickey().export_key()
+
+
         self.hand=[]
         self.table=[]
         self.cheating = 100 #0-100%
@@ -25,10 +34,14 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25565))
-        msg = {"name": self.name}
+        self.s.connect(('localhost', 25566))
+        msg = {"name": self.name, 'publica': public_key}
         self.s.sendall(pickle.dumps(msg))
         print("You connected with name",self.name)
+        print(private_key)
+        print(len(private_key))
+        print(public_key)
+        print(len(public_key))
         
         while 1:
             print("\n-----------",self.name,"---------------")
@@ -40,7 +53,7 @@ class Player:
                 print("Entrei")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
-
+                
                 print("Entra decrypt")
                 privateKey = RSA.import_key(open("private.pem").read())
                 decryptor = PKCS1_OAEP.new(privateKey)

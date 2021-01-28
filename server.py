@@ -8,13 +8,15 @@ import crypt
 import numpy as np
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
-import pickle
-
 
 class Server:
 
+    
+
     def __init__(self):
     
+        key1 = RSA.generate(4096)
+        
         self.deck = []    
         self.nplayers = 3
         self.startpieces = 5
@@ -35,10 +37,12 @@ class Server:
                 self.deck += [encrypted]
 
         #print(self.deck)
+
+        
             
                 
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25565))
+        self.s.bind(('localhost', 25566))
         
         print("Waiting for players...\n")
         
@@ -46,13 +50,22 @@ class Server:
             self.s.listen(1)
             conn, addr = self.s.accept()
             data = pickle.loads(conn.recv(4096))
+            if 'publica' in data:
+                msg1 = data['publica']
+                encryptor = PKCS1_OAEP.new(key1)
+                encrypted = encryptor.encrypt(msg1)
+                print("Encrypted:",encrypted)
+                # aux = data['publica']
+                # print(pickle.loads(aux))
+                # encryptor1 = PKCS1_OAEP.new(aux)
+                # encrypted1 = encryptor1.encrypt(key1)
+                # print(encrypted1)
             if 'name' in data:
                 name=data['name']
                 print("Player",name,"connected.")
                 self.players += [name]
                 self.conn[name]=conn
                 self.addr[name]=addr
-            
             if len(self.players)==self.nplayers:
                 print("Lobby is full")
                 break
