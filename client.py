@@ -10,6 +10,10 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import pickle
 from cryptography.fernet import Fernet
+import base64
+from base64 import b64encode, b64decode
+import json
+import time
 
 class Player:
   
@@ -38,34 +42,36 @@ class Player:
             data = pickle.loads(self.s.recv(4096))
             print(data)
             if 'key' in data:
+                print("recebi chave")
                 self.serverkey = data['key']
+                print("chave: ",self.serverkey)
 
             print("Recebi")
             if 'piece' in data:
+                start = time.time()
                 print("Entrei")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
 
                 print("Entra decrypt")
-                # with open('secure.pem', 'rb') as my_private_key:
-                #     key = my_private_key.read()
-        
+
+                
                 f = Fernet(self.serverkey)
-                #cleartext = base64.urlsafe_ b64decode()
-                cleartext = f.decrypt(data['piece'])
-                cleartext = cleartext.decode()
-                print(cleartext)
+                cipheredtext = data['piece']
+                cleartext = f.decrypt(cipheredtext)
+                undecodedtext = base64.b64decode(cleartext)
+                finalPiece = json.loads(undecodedtext.decode())
                 
-                # privateKey = RSA.import_key(open("private.pem").read())
-                # decryptor = PKCS1_OAEP.new(privateKey)
-                # decrypted = decryptor.decrypt(data['piece'])
-                print('Decrypted:', pickle.loads(cleartext))
                 
-                self.hand+= [pickle.loads(decrypted)]
+                print("finalPiece: ", finalPiece)
+                self.hand.append(finalPiece)
 
                 print("Received a piece.")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
+
+                end = time.time()
+                print(end - start)
             elif 'play' in data:
                 print("Nao entrei")
                 self.table=data['play']

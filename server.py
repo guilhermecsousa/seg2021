@@ -10,6 +10,7 @@ import os
 import hashlib
 from Crypto import Random
 from Crypto.Cipher import AES
+import base64
 from base64 import b64encode, b64decode
 from cryptography.fernet import Fernet
 
@@ -41,8 +42,9 @@ class Server:
                 print(msg)
                 msg = str(msg).encode()
                 f = Fernet(self.key)
-                encrypted = f.encrypt(msg)
-                encrypted = base64.urlsafe_b64encode(encrypted)
+                
+                encrypted = base64.b64encode(msg)
+                encrypted = f.encrypt(encrypted)
             
                 self.deck += [encrypted]
 
@@ -69,6 +71,7 @@ class Server:
                 break
                 
     def givePiece(self,player):
+        time.sleep(0.5)
         if len(self.deck)>0:
             piece = self.deck.pop(random.randint(0,len(self.deck)-1))
             msg = {"piece": piece}
@@ -86,10 +89,11 @@ class Server:
         
         for i in range(self.startpieces): 
             for player in self.players:
-                self.givePiece(player)
-                
                 msg = {"key": self.key}
                 self.conn[player].sendall(pickle.dumps(msg))
+
+                self.givePiece(player)              
+                
 
                 time.sleep(0.2)
                 
