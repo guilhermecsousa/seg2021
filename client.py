@@ -39,7 +39,7 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25563))
+        self.s.connect(('localhost', 25565))
 
         if self.authenticated:
             pass
@@ -53,7 +53,7 @@ class Player:
         while 1:
             print("\n-----------",self.name,"---------------")
             print("Esperando")
-            data = pickle.loads(self.s.recv(16384))
+            data = pickle.loads(self.s.recv(131072))
 
             # Public keys of all players
             if 'player_keys' in data:
@@ -89,16 +89,16 @@ class Player:
                 print("CipheredText = ",cipheredtext)
                 
                 
-                # f = Fernet(self.allkeys[2])
-                # cleartext = f.decrypt(cipheredtext)
-                # cipheredtext = cleartext
-                # print("CipheredText = ",cipheredtext)
+                f = Fernet(self.allkeys[2])
+                cleartext = f.decrypt(cipheredtext)
+                cipheredtext = cleartext
+                print("CipheredText = ",cipheredtext)
 
                 
-                # f = Fernet(self.allkeys[1])
-                # cleartext = f.decrypt(cipheredtext)
-                # cipheredtext = cleartext
-                # print("CipheredText = ",cipheredtext)
+                f = Fernet(self.allkeys[1])
+                cleartext = f.decrypt(cipheredtext)
+                cipheredtext = cleartext
+                print("CipheredText = ",cipheredtext)
                 
 
                 f = Fernet(self.allkeys[0])
@@ -222,7 +222,7 @@ class Player:
                 print("I don't have a piece to play.")
                 msg={'piece': 'piece'}
                 self.s.sendall(pickle.dumps(msg))
-                data = pickle.loads(self.s.recv(16384))
+                data = pickle.loads(self.s.recv(131072))
                 if 'piece' in data:
                     
                     pkcs1_15.new(key).verify(h, signature)

@@ -66,7 +66,7 @@ class Server:
         #print(self.deck)
 
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25563))
+        self.s.bind(('localhost', 25565))
         
         print("Waiting for players...\n")
         
@@ -74,7 +74,7 @@ class Server:
         while 1:
             self.s.listen(1)
             conn, addr = self.s.accept()
-            data = pickle.loads(conn.recv(16384))
+            data = pickle.loads(conn.recv(131072))
             
             # Append public keys of all players
             if 'key' in data:
@@ -98,11 +98,11 @@ class Server:
                     temp+=1
                     msg = {'player_keys': allkeys}
                     self.conn[each].sendall(pickle.dumps(msg))
-                    data = pickle.loads(self.conn[each].recv(16384))                    
+                    data = pickle.loads(self.conn[each].recv(131072))                    
 
 
 
-                    if temp != 3:
+                    if temp == 0:
                         pass
                     else:
                         msg = {'shuffleEnc' : 'shuffleEnc', 'deck': self.deck}
@@ -112,8 +112,9 @@ class Server:
 
                         self.conn[each].sendall(pickle.dumps(msg))
                         
-                        data = pickle.loads(self.conn[each].recv(16384))                    
+                        data = pickle.loads(self.conn[each].recv(131072))                    
                         print("Deck shuffled and encrypted by: ",each)
+                        self.deck = data['deck']
                     
 
                 print("Lobby is full")
@@ -172,7 +173,7 @@ class Server:
                     self.conn[each].sendall(pickle.dumps(msg))
                     print("Is it ok?")
 
-                    data = pickle.loads(self.conn[each].recv(16384))
+                    data = pickle.loads(self.conn[each].recv(131072))
 
                     if 'gamestate' in data:
                         if data['gamestate'] == 'iwin':
@@ -203,15 +204,15 @@ class Server:
                 print("To play ->",player)
                 msg={'play': self.table}
                 self.conn[player].sendall(pickle.dumps(msg))
-                data = pickle.loads(self.conn[player].recv(16384))
+                data = pickle.loads(self.conn[player].recv(131072))
                 
                 if 'piece' in data:
                     self.givePiece(player)
-                    data = pickle.loads(self.conn[player].recv(16384))
+                    data = pickle.loads(self.conn[player].recv(131072))
                     while 'piece' in data:
                         self.givePiece(player)
                         time.sleep(0.1)
-                        data = pickle.loads(self.conn[player].recv(16384))
+                        data = pickle.loads(self.conn[player].recv(131072))
                 
                 if 'played' in data:
                     self.table=data['played']
