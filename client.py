@@ -23,7 +23,7 @@ class Player:
     
         self.hand=[]
         self.table=[]
-        self.cheating = 100 #0-100%
+        self.cheating = 0 #0-100%
         self.played=[]
         self.authenticated = False
         self.allkeys = []
@@ -39,7 +39,7 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25565))
+        self.s.connect(('localhost', 25566))
 
         if self.authenticated:
             pass
@@ -191,7 +191,6 @@ class Player:
     def playPiece(self):
         
         played=0
-
         
         if self.table==[]:
             self.table += [self.hand.pop(random.randint(0,len(self.hand)-1))]
@@ -236,32 +235,63 @@ class Player:
                     
             if not played:
                 print("I don't have a piece to play.")
-                msg={'piece': 'piece'}
+                msg={'ask': 'ask'}
                 self.s.sendall(pickle.dumps(msg))
+                print('pedi uma peça')
                 data = pickle.loads(self.s.recv(131072))
                 if 'piece' in data:
-                    
-                    pkcs1_15.new(key).verify(h, signature)
+                    # # Client asks for deck
+                    # msg={'showdeck': 'showdeck'}
+                    # self.s.sendall(pickle.dumps(msg))
+                    print(data)
+                    start = time.time()
+                    print("Entrei")
+                    print("My hand: ",self.hand)
+                    print("Table ->",self.table)
 
                     print("Entra decrypt")
-                    # RSA decrypt
-                    privateKey = RSA.import_key(open("private.pem").read())
-                    decryptor = PKCS1_OAEP.new(privateKey)
-                    decrypted = decryptor.decrypt(data['piece'])
-                    print('Decrypted:', pickle.loads(decrypted))
-                    self.hand+= [pickle.loads(decrypted)]
+                    # AES Fernat Decrypt
+                    cipheredtext = data['piece']
+                    for keys in reversed(self.allkeys[1:]):
+                        print(keys)
+                        f = Fernet(keys)
+                        cleartext = f.decrypt(cipheredtext)
+                        cipheredtext = cleartext
+                        print("CipheredText = ",cipheredtext)  
+
+                    f = Fernet(self.allkeys[0])
+                    cleartext = f.decrypt(cipheredtext)
+                    cipheredtext = base64.b64decode(cleartext)
+                    cleartext = cleartext.decode()
+                    print("Cleartext = ", cleartext)
+
+                    finalPiece = json.loads(cipheredtext.decode())
+                    print(finalPiece)
                     
+                    print("finalPiece: ", finalPiece)
+                    self.hand.append(finalPiece)
+
                     print("Received a piece.")
                     print("My hand: ",self.hand)
                     print("Table ->",self.table)
-                    self.playPiece()
+
+                    end = time.time()
+                    print(end - start)
                     
                 if 'nopiece' in data:
-                    msg={'pass': 'pass'}
+                    msg = {'pass': 'pass'}
                     self.s.sendall(pickle.dumps(msg))
                     print("Passed.")
                     print("My hand: ",self.hand)
                     print("Table ->",self.table)
+
+                if 'tiles' in data:
+                    print('ENTROU TILES')
+                    print('Tiles -> ',data['tiles'])
+                    index = random.randint(0,len(data['tiles'])-1)
+                    print('INDEX: ', index)
+                    msg = {'choose': index}
+                    self.s.sendall(pickle.dumps(msg))
                     
 
     def detectCheating(self):       #Our function to detect cheating

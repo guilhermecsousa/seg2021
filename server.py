@@ -66,7 +66,7 @@ class Server:
         #print(self.deck)
 
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25565))
+        self.s.bind(('localhost', 25566))
         
         print("Waiting for players...\n")
         
@@ -140,6 +140,7 @@ class Server:
             self.conn[player].sendall(pickle.dumps(msg))
             print("No more pieces.")
     
+    
     def startGame(self):
         
         #print("deck ->",self.deck,"\n")
@@ -205,18 +206,36 @@ class Server:
                 msg={'play': self.table}
                 self.conn[player].sendall(pickle.dumps(msg))
                 data = pickle.loads(self.conn[player].recv(131072))
+                                 
+                if 'ask' in data:
+                    tile = '[ : ]'
+                    tiles = []
+                    for x in self.deck:
+                        tiles.append(tile)
+                    print("TILEEEEEES: ", tiles)
+                    if len(tiles) > 0 :
+                        print('há peças')
+                        msg = {'tiles' : tiles}
+                        self.conn[each].sendall(pickle.dumps(msg))
+                    else:
+                        print('não há peças')
+                        msg = {'notiles' : 'notiles'}
+                        self.conn[each].sendall(pickle.dumps(msg))
+
+                    # self.givePiece(player)
+                    # time.sleep(0.1)
+                    # data = pickle.loads(self.conn[player].recv(131072))
                 
-                if 'piece' in data:
-                    self.givePiece(player)
-                    data = pickle.loads(self.conn[player].recv(131072))
-                    while 'piece' in data:
-                        self.givePiece(player)
-                        time.sleep(0.1)
-                        data = pickle.loads(self.conn[player].recv(131072))
-                
-                if 'played' in data:
+                if 'choose' in data:
+                    print(data['choose'])
+                    piece = self.deck.pop(data['choose'])
+                    print('escolhi a peça', piece)
+                    msg = {"piece": piece}
+                    self.conn[player].sendall(pickle.dumps(msg))
+                    print("Piece given.")
+
+                if  'played' in data:
                     self.table=data['played']
-                    print("Piece played.")
                     print("Table ->",self.table)
 
                 if 'pass' in data:
