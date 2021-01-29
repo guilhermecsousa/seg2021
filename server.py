@@ -35,11 +35,11 @@ class Server:
         self.key = Fernet.generate_key()
         print("Done")
 
-        # RSA to generate server public and private key
-        print("Generating private and public key...")
-        self.private_key = RSA.generate(4096)
-        self.public_key = self.private_key.publickey().export_key()
-        print("Done")        
+        # # RSA to generate server public and private key
+        # print("Generating private and public key...")
+        # self.private_key = RSA.generate(4096)
+        # self.public_key = self.private_key.publickey().export_key()
+        # print("Done")        
         
 
         if len(sys.argv) >= 2:
@@ -49,7 +49,7 @@ class Server:
         for i in range(7):
             for j in range(i,7):
                 msg = [i,j]
-                print(msg)
+                #print(msg)
                 msg = str(msg).encode()
 
                 # Fernet AES Encrypt
@@ -58,29 +58,34 @@ class Server:
                 encrypted = f.encrypt(encrypted)
                 
                 # Signature: 
-                h = SHA256.new(encrypted)
-                signedPiece = pkcs1_15.new(self.private_key).sign(h)
+                # h = SHA256.new(encrypted)
+                # signedPiece = pkcs1_15.new(self.private_key).sign(h)
                 
-                self.deck += [signedPiece]
-
+                self.deck += [encrypted]
 
         #print(self.deck)
 
-
-        
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25563))
+        self.s.bind(('localhost', 25567))
         
         print("Waiting for players...\n")
         
+        player_keys = [self.key]
         while 1:
             self.s.listen(1)
             conn, addr = self.s.accept()
             data = pickle.loads(conn.recv(16384))
+            
+            # Append public keys of all players
+            if 'key' in data:
+                if data['key'] not in player_keys:
+                    player_keys.append(data['key'])
+                    
             if 'name' in data:
                 name=data['name']
-                print("Player",name)#,"connected with key: ",data['pubkey'])
-                self.players += [[name,data['pubkey']]]
+                key = data['key']
+                print("Player",name, "connected with key: ",key)
+                self.players += [name] #,data['pubkey']
                 self.conn[name]=conn
                 self.addr[name]=addr
             
@@ -88,25 +93,20 @@ class Server:
             
             if len(self.players)==self.nplayers:
                 print("entrei")
-                
                 for each in self.players:
-
-
-                    msg = {'shuffleSign' : 'shuffleSign', 'deck': self.deck}
-                    
+                    msg = {'shuffleEnc' : 'shuffleEnc', 'deck': self.deck, 'player_keys': player_keys}
+                    print(player_keys)
                     print("Gonna send deck to shuffle")
-                    self.conn[each[0]].sendall(pickle.dumps(msg))
+                    self.conn[each].sendall(pickle.dumps(msg))
                     time.sleep(0.5)
-
-                    data = pickle.loads(self.conn[each[0]].recv(16384))
-
-                    print("Deck shuffled and signed by: ",each[0])
-
-
-                
-
+                    data = pickle.loads(self.conn[each].recv(16384))
+                    print("Deck shuffled and encrypted by: ",each)
+                    msg = {'player_keys' : player_keys}
+                    self.conn[each].sendall(pickle.dumps(msg))
                 print("Lobby is full")
                 break
+        if 'deck' in data:
+            self.deck = data['deck']
                 
     def givePiece(self,player):
         time.sleep(0.5)
@@ -118,12 +118,12 @@ class Server:
 
 
             msg = {"piece": piece}
-            self.conn[player[0]].sendall(pickle.dumps(msg))
+            self.conn[player].sendall(pickle.dumps(msg))
             print("Piece given.")
 
         else:
             msg = {'nopiece': 'nopiece'}
-            self.conn[player[0]].sendall(pickle.dumps(msg))
+            self.conn[player].sendall(pickle.dumps(msg))
             print("No more pieces.")
     
     def startGame(self):
@@ -134,11 +134,10 @@ class Server:
         for i in range(self.startpieces): 
             for player in self.players:
                 msg = {"key": self.key}
-                self.conn[player[0]].sendall(pickle.dumps(msg))
+                self.conn[player].sendall(pickle.dumps(msg))
 
                 self.givePiece(player)              
                 
-
                 time.sleep(0.2)
                 
         self.playGame()
@@ -146,7 +145,7 @@ class Server:
     def playGame(self):
         
         running=1
-        
+
         while running:
                 
             passed=0
@@ -157,14 +156,14 @@ class Server:
                     count+=1
                     msg = {'isitok' : 'isitok', 'tableRefresh': self.table}
                     time.sleep(0.2)
-                    self.conn[each[0]].sendall(pickle.dumps(msg))
+                    self.conn[each].sendall(pickle.dumps(msg))
                     print("Is it ok?")
 
-                    data = pickle.loads(self.conn[each[0]].recv(16384))
+                    data = pickle.loads(self.conn[each].recv(16384))
 
                     if 'gamestate' in data:
                         if data['gamestate'] == 'iwin':
-                            print("The winner is",each[0])
+                            print("The winner is",each)
                             print("Game Ended.")                        
                             running = 0
                             self.s.close()
@@ -190,16 +189,16 @@ class Server:
                 #print("Deck ->",self.deck)
                 print("To play ->",player)
                 msg={'play': self.table}
-                self.conn[player[0]].sendall(pickle.dumps(msg))
-                data = pickle.loads(self.conn[player[0]].recv(16384))
+                self.conn[player].sendall(pickle.dumps(msg))
+                data = pickle.loads(self.conn[player].recv(16384))
                 
                 if 'piece' in data:
                     self.givePiece(player)
-                    data = pickle.loads(self.conn[player[0]].recv(16384))
+                    data = pickle.loads(self.conn[player].recv(16384))
                     while 'piece' in data:
                         self.givePiece(player)
                         time.sleep(0.1)
-                        data = pickle.loads(self.conn[player[0]].recv(16384))
+                        data = pickle.loads(self.conn[player].recv(16384))
                 
                 if 'played' in data:
                     self.table=data['played']
@@ -209,13 +208,7 @@ class Server:
                 if 'pass' in data:
                     print("Passed.")
                     passed=passed+1
-                
-                if 'pubkey' in data:
-                    #RSA
-                    encryptor = PKCS1_OAEP.new(data['pubkey'])
-                    encrypted = encryptor.encrypt(encrypted)
-                    print(encrypted)
-                    
+                                
                 time.sleep(0.1)
                         
             if passed==3:

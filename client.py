@@ -25,8 +25,13 @@ class Player:
         self.table=[]
         self.cheating = 100 #0-100%
         self.played=[]
-        self.serverkey = None
         self.authenticated = False
+        self.player_keys = []
+
+        # Fernet key generation
+        print("Generating symmetric key...")
+        self.key = Fernet.generate_key()
+        print("Done")
 
         if len(sys.argv) >= 2:
             self.name = sys.argv[1]
@@ -34,19 +39,14 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25563))
+        self.s.connect(('localhost', 25567))
 
         if self.authenticated:
             pass
 
         else:
-            # RSA
-            print("Generating private and public key...")
-            self.private_key = RSA.generate(4096)
-            self.public_key = self.private_key.publickey().export_key()
-            print("Done")
-
-            msg = {"name": self.name, "pubkey": self.public_key}
+            
+            msg = {"name": self.name, "key": self.key}
             self.s.sendall(pickle.dumps(msg))
             print("You connected with name",self.name)
         
@@ -54,7 +54,12 @@ class Player:
             print("\n-----------",self.name,"---------------")
             print("Esperando")
             data = pickle.loads(self.s.recv(16384))
-            print(data)
+
+            # Public keys of all players
+            if 'player_keys' in data:
+                self.player_keys = data['player_keys']
+                print(self.player_keys)
+                
             if 'key' in data:
                 print("recebi chave")
                 self.serverkey = data['key']
@@ -62,6 +67,7 @@ class Player:
 
             print("Recebi")
             if 'piece' in data:
+                print(data)
                 start = time.time()
                 print("Entrei")
                 print("My hand: ",self.hand)
@@ -70,12 +76,14 @@ class Player:
                 print("Entra decrypt")
 
                 # AES Fernat Decrypt
-                f = Fernet(self.serverkey)
-                cipheredtext = data['piece']
-                cleartext = f.decrypt(cipheredtext)
-                undecodedtext = base64.b64decode(cleartext)
-                finalPiece = json.loads(undecodedtext.decode())
-                
+                for keys in reversed(self.player_keys):
+                    print(keys)
+                    f = Fernet(keys)
+                    cipheredtext = data['piece']
+                    cleartext = f.decrypt(cipheredtext)
+                    undecodedtext = base64.b64decode(cleartext)
+                    print(undecodedtext)
+                #    finalPiece = json.loads(undecodedtext.decode())
                 
                 print("finalPiece: ", finalPiece)
                 self.hand.append(finalPiece)
@@ -115,24 +123,24 @@ class Player:
                     time.sleep(0.1)
                     self.s.sendall(pickle.dumps(msg))
 
-            elif 'shuffleSign' in data:
+            elif 'shuffleEnc' in data:
                 #Player will shuffle deck and sign with private
                 shuffledSignedDeck = []
                 for each in data['deck']:
+                   
+                    each = str(each).encode()
+                    # Fernet AES 
+                    f = Fernet(self.key)
+                    encrypted = base64.b64encode(each)
+                    encrypted = f.encrypt(encrypted)
+                    shuffledSignedDeck += [encrypted]
+                #print(shuffledSignedDeck)
+                print("everyday I'm shuffling")
 
-                
-                    # Signature: https://pycryptodome.readthedocs.io/en/latest/src/signature/pkcs1_v1_5.html
-                    h = SHA256.new(each)
-                    signedPiece = pkcs1_15.new(self.private_key).sign(h)
-                
-                    shuffledSignedDeck += [signedPiece]
+                random.shuffle(shuffledSignedDeck)
 
-                    print("everyday I'm shuffling")
-
-                    random.shuffle(shuffledSignedDeck)
-
-                    msg = {'shuffleSign' : 'shuffleSign', 'deck': shuffledSignedDeck}
-                    self.s.sendall(pickle.dumps(msg))
+                msg = {'shuffleSign' : 'shuffleSign', 'deck': shuffledSignedDeck}
+                self.s.sendall(pickle.dumps(msg))
 
             else:
                 print("nothing happened")
@@ -190,6 +198,8 @@ class Player:
                 data = pickle.loads(self.s.recv(16384))
                 if 'piece' in data:
                     
+                    pkcs1_15.new(key).verify(h, signature)
+
                     print("Entra decrypt")
                     # RSA decrypt
                     privateKey = RSA.import_key(open("private.pem").read())
