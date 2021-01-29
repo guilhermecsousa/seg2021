@@ -13,6 +13,8 @@ from Crypto.Cipher import AES
 import base64
 from base64 import b64encode, b64decode
 from cryptography.fernet import Fernet
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 
 class Server:
     
@@ -26,9 +28,10 @@ class Server:
         self.conn = {}
         self.addr = {}
         self.key = Fernet.generate_key()
+
+        key = RSA.generate(4096)
         
         # symmetric key generation using the Fernet cipher
-        
         # with open('secure.pem', 'wb') as new_key_file:
         #     new_key_file.write(key)
 
@@ -41,14 +44,19 @@ class Server:
                 msg = [i,j]
                 print(msg)
                 msg = str(msg).encode()
+
+                # Fernet AES Encrypt
                 f = Fernet(self.key)
-                
                 encrypted = base64.b64encode(msg)
                 encrypted = f.encrypt(encrypted)
-            
+                # RSA Encrypt
+                encryptor = PKCS1_OAEP.new(key)
+                encrypted = encryptor.encrypt(encrypted)
                 self.deck += [encrypted]
 
-        print(self.deck)
+        #print(self.deck)
+
+
         
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.bind(('localhost', 25567))
@@ -61,7 +69,7 @@ class Server:
             data = pickle.loads(conn.recv(4096))
             if 'name' in data:
                 name=data['name']
-                print("Player",name,"connected.")
+                print("Player",name,"connected with key: ",data['pubkey'])
                 self.players += [name]
                 self.conn[name]=conn
                 self.addr[name]=addr
@@ -156,15 +164,21 @@ class Server:
                         self.givePiece(player)
                         time.sleep(0.1)
                         data = pickle.loads(self.conn[player].recv(4096))
-                    #print("Deck ->",self.deck)
+                
                 if 'played' in data:
                     self.table=data['played']
                     print("Piece played.")
-                    print("Table ->",self.table)    
+                    print("Table ->",self.table)
+
                 if 'pass' in data:
                     print("Passed.")
                     passed=passed+1
                 
+                if 'pubkey' in data:
+                    #RSA
+                    encryptor = PKCS1_OAEP.new(data['pubkey'])
+                    encrypted = encryptor.encrypt(encrypted)
+                    print(encrypted)
                     
                 time.sleep(0.1)
                         

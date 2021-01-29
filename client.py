@@ -24,6 +24,7 @@ class Player:
         self.cheating = 100 #0-100%
         self.played=[]
         self.serverkey = None
+        self.authenticated = False
 
         if len(sys.argv) >= 2:
             self.name = sys.argv[1]
@@ -32,9 +33,19 @@ class Player:
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect(('localhost', 25567))
-        msg = {"name": self.name}
-        self.s.sendall(pickle.dumps(msg))
-        print("You connected with name",self.name)
+
+        if self.authenticated:
+            pass
+
+        else:
+            # RSA
+            key = RSA.generate(4096)
+            private_key = key.export_key()
+            public_key = key.publickey().export_key()
+
+            msg = {"name": self.name, "pubkey": public_key}
+            self.s.sendall(pickle.dumps(msg))
+            print("You connected with name",self.name)
         
         while 1:
             print("\n-----------",self.name,"---------------")
@@ -55,7 +66,7 @@ class Player:
 
                 print("Entra decrypt")
 
-                
+                # AES Fernat Decrypt
                 f = Fernet(self.serverkey)
                 cipheredtext = data['piece']
                 cleartext = f.decrypt(cipheredtext)
@@ -156,6 +167,7 @@ class Player:
                 if 'piece' in data:
                     
                     print("Entra decrypt")
+                    # RSA decrypt
                     privateKey = RSA.import_key(open("private.pem").read())
                     decryptor = PKCS1_OAEP.new(privateKey)
                     decrypted = decryptor.decrypt(data['piece'])
