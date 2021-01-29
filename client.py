@@ -26,7 +26,7 @@ class Player:
         self.cheating = 100 #0-100%
         self.played=[]
         self.authenticated = False
-        self.player_keys = []
+        self.allkeys = []
 
         # Fernet key generation
         print("Generating symmetric key...")
@@ -39,7 +39,7 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25567))
+        self.s.connect(('localhost', 25563))
 
         if self.authenticated:
             pass
@@ -57,8 +57,11 @@ class Player:
 
             # Public keys of all players
             if 'player_keys' in data:
-                self.player_keys = data['player_keys']
-                print(self.player_keys)
+                self.allkeys = data['player_keys']
+                print(self.allkeys)
+                msg={'Recebi': 'Recebi'}
+                self.s.sendall(pickle.dumps(msg))
+
                 
             if 'key' in data:
                 print("recebi chave")
@@ -74,16 +77,41 @@ class Player:
                 print("Table ->",self.table)
 
                 print("Entra decrypt")
-
+                
+                cipheredtext = data['piece']
                 # AES Fernat Decrypt
-                for keys in reversed(self.player_keys):
-                    print(keys)
-                    f = Fernet(keys)
-                    cipheredtext = data['piece']
-                    cleartext = f.decrypt(cipheredtext)
-                    undecodedtext = base64.b64decode(cleartext)
-                    print(undecodedtext)
-                #    finalPiece = json.loads(undecodedtext.decode())
+                #for key in reversed(self.player_keys):
+
+                
+                f = Fernet(self.allkeys[3])
+                cleartext = f.decrypt(cipheredtext)
+                cipheredtext = cleartext
+                print("CipheredText = ",cipheredtext)
+                
+                
+                # f = Fernet(self.allkeys[2])
+                # cleartext = f.decrypt(cipheredtext)
+                # cipheredtext = cleartext
+                # print("CipheredText = ",cipheredtext)
+
+                
+                # f = Fernet(self.allkeys[1])
+                # cleartext = f.decrypt(cipheredtext)
+                # cipheredtext = cleartext
+                # print("CipheredText = ",cipheredtext)
+                
+
+                f = Fernet(self.allkeys[0])
+                cleartext = f.decrypt(cipheredtext)
+                cipheredtext = base64.b64decode(cleartext)
+                #cipheredtext = cleartext
+                cleartext = cleartext.decode()
+                print("Cleartext = ", cleartext)
+                
+
+
+                finalPiece = json.loads(cipheredtext.decode())
+                print(finalPiece)
                 
                 print("finalPiece: ", finalPiece)
                 self.hand.append(finalPiece)
@@ -128,12 +156,11 @@ class Player:
                 shuffledSignedDeck = []
                 for each in data['deck']:
                    
-                    each = str(each).encode()
                     # Fernet AES 
                     f = Fernet(self.key)
-                    encrypted = base64.b64encode(each)
-                    encrypted = f.encrypt(encrypted)
+                    encrypted = f.encrypt(each)
                     shuffledSignedDeck += [encrypted]
+
                 #print(shuffledSignedDeck)
                 print("everyday I'm shuffling")
 

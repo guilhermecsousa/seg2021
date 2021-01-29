@@ -66,11 +66,11 @@ class Server:
         #print(self.deck)
 
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25567))
+        self.s.bind(('localhost', 25563))
         
         print("Waiting for players...\n")
         
-        player_keys = [self.key]
+        allkeys = [self.key]
         while 1:
             self.s.listen(1)
             conn, addr = self.s.accept()
@@ -78,8 +78,8 @@ class Server:
             
             # Append public keys of all players
             if 'key' in data:
-                if data['key'] not in player_keys:
-                    player_keys.append(data['key'])
+                if data['key'] not in allkeys:
+                    allkeys.append(data['key'])
                     
             if 'name' in data:
                 name=data['name']
@@ -93,16 +93,29 @@ class Server:
             
             if len(self.players)==self.nplayers:
                 print("entrei")
+                temp=0
                 for each in self.players:
-                    msg = {'shuffleEnc' : 'shuffleEnc', 'deck': self.deck, 'player_keys': player_keys}
-                    print(player_keys)
-                    print("Gonna send deck to shuffle")
+                    temp+=1
+                    msg = {'player_keys': allkeys}
                     self.conn[each].sendall(pickle.dumps(msg))
-                    time.sleep(0.5)
-                    data = pickle.loads(self.conn[each].recv(16384))
-                    print("Deck shuffled and encrypted by: ",each)
-                    msg = {'player_keys' : player_keys}
-                    self.conn[each].sendall(pickle.dumps(msg))
+                    data = pickle.loads(self.conn[each].recv(16384))                    
+
+
+
+                    if temp != 3:
+                        pass
+                    else:
+                        msg = {'shuffleEnc' : 'shuffleEnc', 'deck': self.deck}
+                        #print(player_keys)
+
+                        print("Gonna send deck to shuffle")
+
+                        self.conn[each].sendall(pickle.dumps(msg))
+                        
+                        data = pickle.loads(self.conn[each].recv(16384))                    
+                        print("Deck shuffled and encrypted by: ",each)
+                    
+
                 print("Lobby is full")
                 break
         if 'deck' in data:
