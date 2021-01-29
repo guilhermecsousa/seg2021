@@ -78,28 +78,15 @@ class Player:
 
                 print("Entra decrypt")
                 
-                cipheredtext = data['piece']
+
                 # AES Fernat Decrypt
-                #for key in reversed(self.player_keys):
-
-                
-                f = Fernet(self.allkeys[3])
-                cleartext = f.decrypt(cipheredtext)
-                cipheredtext = cleartext
-                print("CipheredText = ",cipheredtext)
-                
-                
-                f = Fernet(self.allkeys[2])
-                cleartext = f.decrypt(cipheredtext)
-                cipheredtext = cleartext
-                print("CipheredText = ",cipheredtext)
-
-                
-                f = Fernet(self.allkeys[1])
-                cleartext = f.decrypt(cipheredtext)
-                cipheredtext = cleartext
-                print("CipheredText = ",cipheredtext)
-                
+                cipheredtext = data['piece']
+                for keys in reversed(self.allkeys[1:]):
+                    print(keys)
+                    f = Fernet(keys)
+                    cleartext = f.decrypt(cipheredtext)
+                    cipheredtext = cleartext
+                    print("CipheredText = ",cipheredtext)  
 
                 f = Fernet(self.allkeys[0])
                 cleartext = f.decrypt(cipheredtext)
@@ -107,6 +94,35 @@ class Player:
                 #cipheredtext = cleartext
                 cleartext = cleartext.decode()
                 print("Cleartext = ", cleartext)
+
+
+                # AES Fernat Decrypt
+
+                
+                # f = Fernet(self.allkeys[3])
+                # cleartext = f.decrypt(cipheredtext)
+                # cipheredtext = cleartext
+                # print("CipheredText = ",cipheredtext)
+                
+                
+                # f = Fernet(self.allkeys[2])
+                # cleartext = f.decrypt(cipheredtext)
+                # cipheredtext = cleartext
+                # print("CipheredText = ",cipheredtext)
+
+                
+                # f = Fernet(self.allkeys[1])
+                # cleartext = f.decrypt(cipheredtext)
+                # cipheredtext = cleartext
+                # print("CipheredText = ",cipheredtext)
+                
+
+                # f = Fernet(self.allkeys[0])
+                # cleartext = f.decrypt(cipheredtext)
+                # cipheredtext = base64.b64decode(cleartext)
+                # #cipheredtext = cleartext
+                # cleartext = cleartext.decode()
+                # print("Cleartext = ", cleartext)
                 
 
 
