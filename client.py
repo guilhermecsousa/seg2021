@@ -79,7 +79,7 @@ class Player:
                 print("Entra decrypt")
                 
 
-                # AES Fernat Decrypt
+                # AES Fernet Decrypt
                 cipheredtext = data['piece']
                 for keys in reversed(self.allkeys[1:]):
                     print(keys)
@@ -91,39 +91,8 @@ class Player:
                 f = Fernet(self.allkeys[0])
                 cleartext = f.decrypt(cipheredtext)
                 cipheredtext = base64.b64decode(cleartext)
-                #cipheredtext = cleartext
                 cleartext = cleartext.decode()
                 print("Cleartext = ", cleartext)
-
-
-                # AES Fernat Decrypt
-
-                
-                # f = Fernet(self.allkeys[3])
-                # cleartext = f.decrypt(cipheredtext)
-                # cipheredtext = cleartext
-                # print("CipheredText = ",cipheredtext)
-                
-                
-                # f = Fernet(self.allkeys[2])
-                # cleartext = f.decrypt(cipheredtext)
-                # cipheredtext = cleartext
-                # print("CipheredText = ",cipheredtext)
-
-                
-                # f = Fernet(self.allkeys[1])
-                # cleartext = f.decrypt(cipheredtext)
-                # cipheredtext = cleartext
-                # print("CipheredText = ",cipheredtext)
-                
-
-                # f = Fernet(self.allkeys[0])
-                # cleartext = f.decrypt(cipheredtext)
-                # cipheredtext = base64.b64decode(cleartext)
-                # #cipheredtext = cleartext
-                # cleartext = cleartext.decode()
-                # print("Cleartext = ", cleartext)
-                
 
 
                 finalPiece = json.loads(cipheredtext.decode())
@@ -278,7 +247,7 @@ class Player:
                     end = time.time()
                     print(end - start)
                     
-                if 'nopiece' in data:
+                if 'notiles' in data:
                     msg = {'pass': 'pass'}
                     self.s.sendall(pickle.dumps(msg))
                     print("Passed.")

@@ -216,11 +216,11 @@ class Server:
                     if len(tiles) > 0 :
                         print('há peças')
                         msg = {'tiles' : tiles}
-                        self.conn[each].sendall(pickle.dumps(msg))
+                        self.conn[player].sendall(pickle.dumps(msg))
                     else:
                         print('não há peças')
                         msg = {'notiles' : 'notiles'}
-                        self.conn[each].sendall(pickle.dumps(msg))
+                        self.conn[player].sendall(pickle.dumps(msg))
 
                     # self.givePiece(player)
                     # time.sleep(0.1)
