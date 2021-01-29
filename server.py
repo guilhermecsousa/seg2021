@@ -15,6 +15,8 @@ from base64 import b64encode, b64decode
 from cryptography.fernet import Fernet
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Signature import pkcs1_15
+from Crypto.Hash import SHA256
 
 class Server:
     
@@ -27,13 +29,18 @@ class Server:
         self.table = []
         self.conn = {}
         self.addr = {}
-        self.key = Fernet.generate_key()
 
-        key = RSA.generate(4096)
-        
         # symmetric key generation using the Fernet cipher
-        # with open('secure.pem', 'wb') as new_key_file:
-        #     new_key_file.write(key)
+        print("Generating symmetric key...")
+        self.key = Fernet.generate_key()
+        print("Done")
+
+        # RSA to generate server public and private key
+        print("Generating private and public key...")
+        self.private_key = RSA.generate(4096)
+        self.public_key = self.private_key.publickey().export_key()
+        print("Done")        
+        
 
         if len(sys.argv) >= 2:
             self.nplayers = sys.argv[1]
@@ -49,45 +56,74 @@ class Server:
                 f = Fernet(self.key)
                 encrypted = base64.b64encode(msg)
                 encrypted = f.encrypt(encrypted)
-                # RSA Encrypt
-                encryptor = PKCS1_OAEP.new(key)
-                encrypted = encryptor.encrypt(encrypted)
-                self.deck += [encrypted]
+                
+                # Signature: 
+                h = SHA256.new(encrypted)
+                signedPiece = pkcs1_15.new(self.private_key).sign(h)
+                
+                self.deck += [signedPiece]
+
 
         #print(self.deck)
 
 
         
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25567))
+        self.s.bind(('localhost', 25563))
         
         print("Waiting for players...\n")
         
         while 1:
             self.s.listen(1)
             conn, addr = self.s.accept()
-            data = pickle.loads(conn.recv(4096))
+            data = pickle.loads(conn.recv(16384))
             if 'name' in data:
                 name=data['name']
-                print("Player",name,"connected with key: ",data['pubkey'])
-                self.players += [name]
+                print("Player",name)#,"connected with key: ",data['pubkey'])
+                self.players += [[name,data['pubkey']]]
                 self.conn[name]=conn
                 self.addr[name]=addr
             
+            print("length players: ",len(self.players))
+            
             if len(self.players)==self.nplayers:
+                print("entrei")
+                
+                for each in self.players:
+
+
+                    msg = {'shuffleSign' : 'shuffleSign', 'deck': self.deck}
+                    
+                    print("Gonna send deck to shuffle")
+                    self.conn[each[0]].sendall(pickle.dumps(msg))
+                    time.sleep(0.5)
+
+                    data = pickle.loads(self.conn[each[0]].recv(16384))
+
+                    print("Deck shuffled and signed by: ",each[0])
+
+
+                
+
                 print("Lobby is full")
                 break
                 
     def givePiece(self,player):
         time.sleep(0.5)
+
+        
         if len(self.deck)>0:
+
             piece = self.deck.pop(random.randint(0,len(self.deck)-1))
+
+
             msg = {"piece": piece}
-            self.conn[player].sendall(pickle.dumps(msg))
+            self.conn[player[0]].sendall(pickle.dumps(msg))
             print("Piece given.")
+
         else:
             msg = {'nopiece': 'nopiece'}
-            self.conn[player].sendall(pickle.dumps(msg))
+            self.conn[player[0]].sendall(pickle.dumps(msg))
             print("No more pieces.")
     
     def startGame(self):
@@ -98,7 +134,7 @@ class Server:
         for i in range(self.startpieces): 
             for player in self.players:
                 msg = {"key": self.key}
-                self.conn[player].sendall(pickle.dumps(msg))
+                self.conn[player[0]].sendall(pickle.dumps(msg))
 
                 self.givePiece(player)              
                 
@@ -121,14 +157,14 @@ class Server:
                     count+=1
                     msg = {'isitok' : 'isitok', 'tableRefresh': self.table}
                     time.sleep(0.2)
-                    self.conn[each].sendall(pickle.dumps(msg))
+                    self.conn[each[0]].sendall(pickle.dumps(msg))
                     print("Is it ok?")
 
-                    data = pickle.loads(self.conn[each].recv(4096))
+                    data = pickle.loads(self.conn[each[0]].recv(16384))
 
                     if 'gamestate' in data:
                         if data['gamestate'] == 'iwin':
-                            print("The winner is",each)
+                            print("The winner is",each[0])
                             print("Game Ended.")                        
                             running = 0
                             self.s.close()
@@ -154,16 +190,16 @@ class Server:
                 #print("Deck ->",self.deck)
                 print("To play ->",player)
                 msg={'play': self.table}
-                self.conn[player].sendall(pickle.dumps(msg))
-                data = pickle.loads(self.conn[player].recv(4096))
+                self.conn[player[0]].sendall(pickle.dumps(msg))
+                data = pickle.loads(self.conn[player[0]].recv(16384))
                 
                 if 'piece' in data:
                     self.givePiece(player)
-                    data = pickle.loads(self.conn[player].recv(4096))
+                    data = pickle.loads(self.conn[player[0]].recv(16384))
                     while 'piece' in data:
                         self.givePiece(player)
                         time.sleep(0.1)
-                        data = pickle.loads(self.conn[player].recv(4096))
+                        data = pickle.loads(self.conn[player[0]].recv(16384))
                 
                 if 'played' in data:
                     self.table=data['played']

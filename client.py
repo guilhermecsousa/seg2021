@@ -14,6 +14,8 @@ import base64
 from base64 import b64encode, b64decode
 import json
 import time
+from Crypto.Signature import pkcs1_15
+from Crypto.Hash import SHA256
 
 class Player:
   
@@ -32,25 +34,26 @@ class Player:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25567))
+        self.s.connect(('localhost', 25563))
 
         if self.authenticated:
             pass
 
         else:
             # RSA
-            key = RSA.generate(4096)
-            private_key = key.export_key()
-            public_key = key.publickey().export_key()
+            print("Generating private and public key...")
+            self.private_key = RSA.generate(4096)
+            self.public_key = self.private_key.publickey().export_key()
+            print("Done")
 
-            msg = {"name": self.name, "pubkey": public_key}
+            msg = {"name": self.name, "pubkey": self.public_key}
             self.s.sendall(pickle.dumps(msg))
             print("You connected with name",self.name)
         
         while 1:
             print("\n-----------",self.name,"---------------")
             print("Esperando")
-            data = pickle.loads(self.s.recv(4096))
+            data = pickle.loads(self.s.recv(16384))
             print(data)
             if 'key' in data:
                 print("recebi chave")
@@ -98,6 +101,7 @@ class Player:
                     msg={'gamestate': 'iwin'}
                     self.s.sendall(pickle.dumps(msg))
                     print("Winner winner chicken dinner.")
+
             elif 'isitok' in data:
                 self.table=data['tableRefresh']
                 print("tou no itisok")
@@ -110,6 +114,26 @@ class Player:
                     msg = {'gamestate' : 'ok'}
                     time.sleep(0.1)
                     self.s.sendall(pickle.dumps(msg))
+
+            elif 'shuffleSign' in data:
+                #Player will shuffle deck and sign with private
+                shuffledSignedDeck = []
+                for each in data['deck']:
+
+                
+                    # Signature: https://pycryptodome.readthedocs.io/en/latest/src/signature/pkcs1_v1_5.html
+                    h = SHA256.new(each)
+                    signedPiece = pkcs1_15.new(self.private_key).sign(h)
+                
+                    shuffledSignedDeck += [signedPiece]
+
+                    print("everyday I'm shuffling")
+
+                    random.shuffle(shuffledSignedDeck)
+
+                    msg = {'shuffleSign' : 'shuffleSign', 'deck': shuffledSignedDeck}
+                    self.s.sendall(pickle.dumps(msg))
+
             else:
                 print("nothing happened")
                                     
@@ -163,7 +187,7 @@ class Player:
                 print("I don't have a piece to play.")
                 msg={'piece': 'piece'}
                 self.s.sendall(pickle.dumps(msg))
-                data = pickle.loads(self.s.recv(4096))
+                data = pickle.loads(self.s.recv(16384))
                 if 'piece' in data:
                     
                     print("Entra decrypt")
