@@ -57,6 +57,7 @@ class Player:
         
         if cc == "y":
         
+            # certificate user... if somethings wrong about CC, exit program
             lib = '/usr/local/lib/libpteidpkcs11.so'
             if  platform.system() == "Darwin":
                 lib = '/usr/local/lib/libpteidpkcs11.dylib'
@@ -135,6 +136,7 @@ class Player:
             # decrypted = f.decrypt(ciphertext)
             #undecode = base64.b64decode(decrypted)
 
+            # send AES key
             msg = {
                 "AESkey" : self.server_pubkey.encrypt(random_key, padding.PKCS1v15())    
             }

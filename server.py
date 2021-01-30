@@ -76,6 +76,8 @@ class Server:
             conn, addr = self.s.accept()
 
         ############################################### BRUNO #########################################################################
+
+            # receiving user data
             d = []
             while 1:
                 packet = conn.recv(4096)
@@ -86,6 +88,8 @@ class Server:
             flag_continue = True 
 
             if "cc_auth" in data: 
+
+                # if user wants to sign in with cc
                 if data["cc_auth"]:
                     pubKey = x509.load_pem_x509_certificate(data["certs"][0], default_backend()).public_key() #CITIZEN AUTHENTICATION CERTIFICATE
 
@@ -205,7 +209,7 @@ class Server:
                         except:  
                             print("Verification of AESkey failed.")
                     
-                    print("user registed")   
+                    print("user registed")    
         
         #####################################################################################################################################################################################################
             
