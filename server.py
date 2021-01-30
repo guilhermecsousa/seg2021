@@ -60,7 +60,7 @@ class Server:
 
         # Create channel for communication
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25568))
+        self.s.bind(('localhost', 25567))
         print("Waiting for players...\n")
         
 

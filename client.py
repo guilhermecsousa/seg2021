@@ -36,7 +36,7 @@ class Player:
     
         # Connect to socket
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25568))
+        self.s.connect(('localhost', 25567))
 
         # CC Version
         if self.authenticated:
@@ -88,7 +88,7 @@ class Player:
                 print("Table ->",self.table)
 
                 
-                print("Received a piece.")
+                print("Received a piece:")
                 # AES Fernet Decrypt (Players)
                 cipheredtext = data['piece']
                 for keys in reversed(self.allkeys[1:]):
@@ -105,8 +105,9 @@ class Player:
                 # Appends decrypted piece to hand
                 finalPiece = json.loads(cipheredtext.decode())
                 self.hand.append(finalPiece)
+                
+                print(finalPiece)
 
-                print("Decrypted")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
 
