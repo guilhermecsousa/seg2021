@@ -29,7 +29,7 @@ class Player:
     
         self.hand=[]
         self.table=[]
-        self.cheating = 0 #0-100%
+        self.cheating = 100 #0-100%
         self.played=[]
         self.allkeys = []
         self.rsa_private = None

@@ -498,10 +498,12 @@ class Server:
                     #print("length of hand: ",len(self.winnerPlayed))
                     if count == len(self.winnerPlayed):
                         print("Bit commitment verifies!")
+                        announcement = "The player " + str(self.winner) + " has won the game!"
+
                     else:
                         print("Bit commitment didn't verify")
+                        print("The winner cheated!!!")
 
-                    announcement = "The player " + str(self.winner) + " has won the game!"
                     for aPlayer in self.players:
                         msg = {'gameOver': announcement}
                         self.players[aPlayer]['conn'].sendall(pickle.dumps(msg))
