@@ -36,6 +36,7 @@ class Player:
         self.server_pubkey = None
         self.other_players = [] 
         self.aes_key = None
+        self.bitCommit = []
 
         #Create name
         if len(sys.argv) >= 2:
@@ -53,7 +54,8 @@ class Player:
         self.rsa_private = rsa.generate_private_key(public_exponent=65537, key_size=2048) 
         self.rsa_public = self.rsa_private.public_key()
 
-        cc = str(input("Use Citizen Card? (y/n)"))  
+        #cc = str(input("Use Citizen Card? (y/n)"))
+        cc = "n"
         
         if cc == "y":
         
@@ -251,6 +253,7 @@ class Player:
                 print("Table ->",self.table)
 
                 
+                self.bitCommit.append([data['piece']])
                 print("Received a piece:")
                 # AES Fernet Decrypt (Players)
                 cipheredtext = data['piece']
@@ -314,8 +317,6 @@ class Player:
                     if len(self.hand)==0:
                         msg={'gamestate': 'iwin'}
                         self.s.sendall(pickle.dumps(msg))
-                        print("Winner winner chicken dinner.")
-
 
                 #print(end - start) # Decyphering time
             
@@ -338,6 +339,10 @@ class Player:
             # Check if cheating
             if 'isitok' in data:
                 self.table=data['tableRefresh']
+                print("Player that made an action: ",data['whoPlayed'])
+                self.allPlays = data['allPlays']
+                #for each in self.allPlays:
+                    #print(each)
                 if self.detectCheating() == True:
                     print("Malicious activity detected!")
                     msg = {'gamestate' : 'batota'}
@@ -402,6 +407,8 @@ class Player:
                 msg={'ask': 'ask'}
                 self.s.sendall(pickle.dumps(msg))
                 data = pickle.loads(self.s.recv(131072))
+
+                #print("Data received after saying 'ask': ", data)
                 
                 # If there is any, choose one
                 if 'tiles' in data:
@@ -417,13 +424,19 @@ class Player:
                     print("Passed.")
                     print("My hand: ",self.hand)
                     print("Table ->",self.table)
-
+                
+                if 'play' in data: 
+                    print("I don't have a piece to play.")
+                    msg={'ask': 'ask'}
+                    self.s.sendall(pickle.dumps(msg))
+                    data = pickle.loads(self.s.recv(131072))
                 # When he receives a piece, decrypts it with others players and server public keys 
                 # and appends it to the players hand
                 if 'piece' in data:
                     start = time.time()
                     print("My hand: ",self.hand)
                     print("Table ->",self.table)
+
 
                     # AES Fernat Decrypt (Players)
                     cipheredtext = data['piece']
