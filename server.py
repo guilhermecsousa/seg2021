@@ -60,7 +60,7 @@ class Server:
 
         # Create channel for communication
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25562))
+        self.s.bind(('localhost', 25563))
         print("Waiting for players...\n")
 
         #################################### BRUNO #############################################################################
@@ -479,22 +479,27 @@ class Server:
                     for tile in self.winnerPlayed:
                         hash_object = SHA256.new(bytes(tile))
                         hashedTile = hash_object.hexdigest()
-                        #print("Tile: ",tile)
-                        #print("Hashed tile: ",hashedTile)
+                        print("Tile: ",tile)
+                        print("Hashed tile: ",hashedTile)
                         
                         #print("Self.allcommits: ",self.allCommits)
+                        
                         for one in self.allCommits:
                             if self.winner == one[0]:
                                 if(hashedTile in one):
+                                    print(hashedTile)
                                     count = count+1
                                     print("true")
                                 else: 
-                                    print("false")
+                                    #print("false")
+                                    pass
 
                     #print("count: ",count)
                     #print("length of hand: ",len(self.winnerPlayed))
                     if count == len(self.winnerPlayed):
                         print("Bit commitment verifies!")
+                    else:
+                        print("Bit commitment didn't verify")
 
                     announcement = "The player " + str(self.winner) + " has won the game!"
                     for aPlayer in self.players:

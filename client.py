@@ -46,7 +46,7 @@ class Player:
     
         # Connect to socket
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25562))
+        self.s.connect(('localhost', 25563))
 
         ############################################# BRUNO ##################################################################################
 
@@ -376,8 +376,8 @@ class Player:
         played=0
         
         if self.table==[]:
-            piece = [self.hand.pop(random.randint(0,len(self.hand)-1))]
-            self.table += piece
+            piece = self.hand.pop(random.randint(0,len(self.hand)-1))
+            self.table += [piece]
             self.played.append(piece)
 
         else:
