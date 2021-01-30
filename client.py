@@ -6,16 +6,11 @@ import string
 import pickle
 import crypt
 import collections
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
-import pickle
-from cryptography.fernet import Fernet
 import base64
-from base64 import b64encode, b64decode
 import json
-import time
-from Crypto.Signature import pkcs1_15
-from Crypto.Hash import SHA256
+from base64 import b64encode, b64decode
+from cryptography.fernet import Fernet
+from Crypto.Cipher import PKCS1_OAEP
 
 class Player:
   
@@ -33,132 +28,167 @@ class Player:
         self.key = Fernet.generate_key()
         print("Done")
 
+        #Create name
         if len(sys.argv) >= 2:
             self.name = sys.argv[1]
         else:
             self.name =''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     
+        # Connect to socket
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25566))
+        self.s.connect(('localhost', 25568))
 
+        # CC Version
         if self.authenticated:
             pass
 
-        else:
-            
+        # No CC Version
+        else: 
             msg = {"name": self.name, "key": self.key}
             self.s.sendall(pickle.dumps(msg))
             print("You connected with name",self.name)
         
         while 1:
             print("\n-----------",self.name,"---------------")
-            print("Esperando")
+            # Waiting for all the players to connect and the server starts the game
+            print("Waiting...")
             data = pickle.loads(self.s.recv(131072))
+          
 
-            # Public keys of all players
-            if 'player_keys' in data:
-                self.allkeys = data['player_keys']
-                print(self.allkeys)
-                msg={'Recebi': 'Recebi'}
+            # Encrypt and shuffle deck 
+            if 'shuffleEnc' in data:
+                shuffleDeck = []
+                for each in data['deck']:
+                   
+                    # Fernet AES Encryption
+                    f = Fernet(self.key)
+                    encrypted = f.encrypt(each)
+                    shuffleDeck += [encrypted]
+
+                # Shuffling
+                print("I'm shuffling the deck")
+                random.shuffle(shuffleDeck)
+
+                # Sends shuffled deck
+                msg = {'deck': shuffleDeck}
                 self.s.sendall(pickle.dumps(msg))
 
-                
-            if 'key' in data:
-                print("recebi chave")
-                self.serverkey = data['key']
-                print("chave: ",self.serverkey)
 
-            print("Recebi")
+            # Store the keys from other players and server, to decrypt 
+            if 'player_keys' in data:
+                self.allkeys = data['player_keys']
+                msg={'GotAllKeys': 'GotAllKeys'}
+                self.s.sendall(pickle.dumps(msg))
+            
+            # Inicial distribution
+            # Decrypt first with players keys and then with server key
             if 'piece' in data:
-                print(data)
                 start = time.time()
-                print("Entrei")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
 
-                print("Entra decrypt")
                 
-
-                # AES Fernet Decrypt
+                print("Received a piece.")
+                # AES Fernet Decrypt (Players)
                 cipheredtext = data['piece']
                 for keys in reversed(self.allkeys[1:]):
-                    print(keys)
                     f = Fernet(keys)
                     cleartext = f.decrypt(cipheredtext)
                     cipheredtext = cleartext
-                    print("CipheredText = ",cipheredtext)  
 
+                # AES Fernet Decrypt (Server)
                 f = Fernet(self.allkeys[0])
                 cleartext = f.decrypt(cipheredtext)
                 cipheredtext = base64.b64decode(cleartext)
                 cleartext = cleartext.decode()
-                print("Cleartext = ", cleartext)
 
-
+                # Appends decrypted piece to hand
                 finalPiece = json.loads(cipheredtext.decode())
-                print(finalPiece)
-                
-                print("finalPiece: ", finalPiece)
                 self.hand.append(finalPiece)
 
-                print("Received a piece.")
+                print("Decrypted")
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
 
+                # Informes server if the piece was correctly received
+                msg = {'gamestate' : 'ok', 'allok' : 'allok'}
+                self.s.sendall(pickle.dumps(msg))
+                
                 end = time.time()
-                print(end - start)
-            elif 'play' in data:
-                print("Nao entrei")
+
+                if 'midgamePiece' in data:
+                    first=self.table[0][0]
+                    last=self.table[len(self.table)-1][1]
+                    for piece in self.hand:
+                        # Game nuances
+                        if piece[0]==first:
+                            self.hand.remove(piece)
+                            self.table=[[piece[1],piece[0]]]+self.table
+                            played=1
+                            self.played.append(piece)
+                        elif piece[1]==first:
+                            self.hand.remove(piece)
+                            self.table=[piece]+self.table
+                            played=1
+                            self.played.append(piece)
+                        elif piece[0]==last:
+                            self.hand.remove(piece)
+                            self.table+=[piece]
+                            played=1
+                            self.played.append(piece)
+                        elif piece[1]==last:
+                            self.hand.remove(piece)
+                            self.table+=[[piece[1],piece[0]]]
+                            played=1
+                            self.played.append(piece)
+
+                    msg={'played': self.table}
+                    self.s.sendall(pickle.dumps(msg))
+                    print("My hand: ",self.hand)
+                    print("Table ->",self.table)
+                    # Winning condition
+                    if len(self.hand)==0:
+                        msg={'gamestate': 'iwin'}
+                        self.s.sendall(pickle.dumps(msg))
+                        print("Winner winner chicken dinner.")
+
+
+                #print(end - start) # Decyphering time
+            
+            # Game
+            if 'play' in data:
                 self.table=data['play']
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
-                print("I have to play a piece.")
                 self.playPiece()
                 msg={'played': self.table}
                 self.s.sendall(pickle.dumps(msg))
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
+                # Winning condition
                 if len(self.hand)==0:
                     msg={'gamestate': 'iwin'}
                     self.s.sendall(pickle.dumps(msg))
                     print("Winner winner chicken dinner.")
 
-            elif 'isitok' in data:
+            # Check if cheating
+            if 'isitok' in data:
                 self.table=data['tableRefresh']
-                print("tou no itisok")
                 if self.detectCheating() == True:
-                    print("It is not ok!")
+                    print("Malicious activity detected!")
                     msg = {'gamestate' : 'batota'}
                     self.s.sendall(pickle.dumps(msg))
                 else:
-                    print("It is ok!")
+                    print("Current table: ",self.table)
                     msg = {'gamestate' : 'ok'}
                     time.sleep(0.1)
                     self.s.sendall(pickle.dumps(msg))
 
-            elif 'shuffleEnc' in data:
-                #Player will shuffle deck and sign with private
-                shuffledSignedDeck = []
-                for each in data['deck']:
-                   
-                    # Fernet AES 
-                    f = Fernet(self.key)
-                    encrypted = f.encrypt(each)
-                    shuffledSignedDeck += [encrypted]
-
-                #print(shuffledSignedDeck)
-                print("everyday I'm shuffling")
-
-                random.shuffle(shuffledSignedDeck)
-
-                msg = {'shuffleSign' : 'shuffleSign', 'deck': shuffledSignedDeck}
-                self.s.sendall(pickle.dumps(msg))
-
             else:
-                print("nothing happened")
+                pass
                                     
     def playPiece(self):
-        
+
         played=0
         
         if self.table==[]:
@@ -167,7 +197,7 @@ class Player:
             first=self.table[0][0]
             last=self.table[len(self.table)-1][1]
             for piece in self.hand:
-            
+                # Game nuances
                 if piece[0]==first:
                     self.hand.remove(piece)
                     self.table=[[piece[1],piece[0]]]+self.table
@@ -189,9 +219,9 @@ class Player:
                     played=1
                     self.played.append(piece)
 
-                #Here we are giving the player a random chance to possibly cheat    
+                # Giving the player a random chance to possibly cheat    
                 elif (piece == self.hand[-1]) and (random.randint(0, 100) < self.cheating):
-                    print("I'm gonna cheat heheeeeeeeeeeeeeeeeee <-----------------------------------")
+                    print("I will try to cheat now")
                     self.hand.remove(piece)
                     piece = [last, first]
                     self.table+=[piece]
@@ -203,23 +233,35 @@ class Player:
                     break
                     
             if not played:
+                # If does not have a piece, asks for one
                 print("I don't have a piece to play.")
                 msg={'ask': 'ask'}
                 self.s.sendall(pickle.dumps(msg))
-                print('pedi uma peça')
                 data = pickle.loads(self.s.recv(131072))
-                if 'piece' in data:
-                    # # Client asks for deck
-                    # msg={'showdeck': 'showdeck'}
-                    # self.s.sendall(pickle.dumps(msg))
-                    print(data)
-                    start = time.time()
-                    print("Entrei")
+                
+                # If there is any, choose one
+                if 'tiles' in data:
+                    print('Tiles -> ',data['tiles'])
+                    index = random.randint(0,len(data['tiles'])-1)
+                    msg = {'choose': index}
+                    self.s.sendall(pickle.dumps(msg))
+
+                # If it does not exist,
+                if 'notiles' in data:
+                    msg = {'pass': 'pass'}
+                    self.s.sendall(pickle.dumps(msg))
+                    print("Passed.")
                     print("My hand: ",self.hand)
                     print("Table ->",self.table)
 
-                    print("Entra decrypt")
-                    # AES Fernat Decrypt
+                # When he receives a piece, decrypts it with others players and server public keys 
+                # and appends it to the players hand
+                if 'piece' in data:
+                    start = time.time()
+                    print("My hand: ",self.hand)
+                    print("Table ->",self.table)
+
+                    # AES Fernat Decrypt (Players)
                     cipheredtext = data['piece']
                     for keys in reversed(self.allkeys[1:]):
                         print(keys)
@@ -228,57 +270,42 @@ class Player:
                         cipheredtext = cleartext
                         print("CipheredText = ",cipheredtext)  
 
+                    # AES Fernat Decrypt (Server)
                     f = Fernet(self.allkeys[0])
                     cleartext = f.decrypt(cipheredtext)
                     cipheredtext = base64.b64decode(cleartext)
                     cleartext = cleartext.decode()
                     print("Cleartext = ", cleartext)
-
-                    finalPiece = json.loads(cipheredtext.decode())
-                    print(finalPiece)
                     
-                    print("finalPiece: ", finalPiece)
+                    # Appends decrypted piece to players hand
+                    finalPiece = json.loads(cipheredtext.decode())
                     self.hand.append(finalPiece)
 
                     print("Received a piece.")
                     print("My hand: ",self.hand)
                     print("Table ->",self.table)
 
+                    # Informes server if the piece was correctly received
+                    msg = {'allok': 'allok'}
+                    self.s.sendall(pickle.dumps(msg))
+
                     end = time.time()
-                    print(end - start)
-                    
-                if 'notiles' in data:
-                    msg = {'pass': 'pass'}
-                    self.s.sendall(pickle.dumps(msg))
-                    print("Passed.")
-                    print("My hand: ",self.hand)
-                    print("Table ->",self.table)
-
-                if 'tiles' in data:
-                    print('ENTROU TILES')
-                    print('Tiles -> ',data['tiles'])
-                    index = random.randint(0,len(data['tiles'])-1)
-                    print('INDEX: ', index)
-                    msg = {'choose': index}
-                    self.s.sendall(pickle.dumps(msg))
-                    
-
-    def detectCheating(self):       #Our function to detect cheating
+                    #print(end - start) # Time to decrypt
+                            
+    #Function to detect cheating
+    def detectCheating(self):       
         duplicates = []
         cheater = False
         knownTiles = self.table + self.hand
-        #print("Known Tiles: ", knownTiles)
         for x in knownTiles:
             reverseX = [x[1],x[0]]          
             if((knownTiles.count(x) > 1 and x not in self.played) or (knownTiles.count(reverseX) > 1 and reverseX not in self.played)):
                 duplicates.append(x)
                 cheater = True
         if(len(duplicates)>0):
-            print("CHEATEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEER")
-            print("duplicates: ", duplicates)
+            print("There is a CHEATER among us!")
+            print("Proof: ", duplicates)
             return True
         return False
 
-
-                    
 p = Player()
