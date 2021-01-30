@@ -46,6 +46,7 @@ class Server:
         self.allCommits = []
         self.games_history = {}
         self.games_counter = 0
+        self.winnerPlayed = []
 
         # Deciding players number 
         if len(sys.argv) >= 2:
@@ -59,7 +60,7 @@ class Server:
 
         # Create channel for communication
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind(('localhost', 25567))
+        self.s.bind(('localhost', 25562))
         print("Waiting for players...\n")
 
         #################################### BRUNO #############################################################################
@@ -299,9 +300,15 @@ class Server:
             piece = self.deck.pop(random.randint(0,len(self.deck)-1))
             msg = {"piece": piece}
 
+            
+
             #Send tile
             self.players[player]['conn'].sendall(pickle.dumps(msg))
             print("Piece given.")
+
+            
+
+            
 
             data = pickle.loads(self.players[player]['conn'].recv(131072))
 
@@ -310,6 +317,14 @@ class Server:
                 print("Player stated the piece was received")
             else: 
                 print("Something's wrong with the key distribution")
+
+            self.allCommits.append([player,data['commit']])
+            #print("self.allCommits: ",self.allCommits)
+            print("He commited the following: ",data['commit'])
+            #msg = {"gotCommit": "gotCommit"}
+            #self.players[player]['conn'].sendall(pickle.dumps(msg))
+
+                
 
     # Game playing
     def playGame(self):
@@ -322,82 +337,89 @@ class Server:
             passed=0
             for player in self.players:
                 i=0
-                while i<1:
-                    i = 1
-                    # Given that everything is okay, we keep the game loop
+                #while i<1:
+                i = 1
+                # Given that everything is okay, we keep the game loop
 
-                    print("\n-----------------------")
-                    #print("Table ->",self.table)
-                    print("To play ->",player)
+                print("\n-----------------------")
+                #print("Table ->",self.table)
+                print("To play ->",player)
 
 
-                    played = False
-                    while played == False:
+                played = False
+                while played == False:
+                    
+                    # Tell the correct player to play
+                    msg={'play': self.table}
+                    self.players[player]['conn'].sendall(pickle.dumps(msg))
+                    
+                    # Receive player action
+                    data = pickle.loads(self.players[player]['conn'].recv(131072))
+
+                    # Player is saying he played, and giving the new table after playing
+                    if 'played' in data:
+                        piecePlayed = [x for x in data['played'] if x not in self.table]
                         
-                        # Tell the correct player to play
-                        msg={'play': self.table}
-                        self.players[player]['conn'].sendall(pickle.dumps(msg))
-                        
-                        # Receive player action
-                        data = pickle.loads(self.players[player]['conn'].recv(131072))
+                        #piecePlayed = data['played'] - self.table
+                        self.table=data['played']
+                        print("Table ->",self.table)
+                        self.allPlays+= [[player,piecePlayed]]
+                        played = True
 
-                        # Player is saying he played, and giving the new table after playing
-                        if 'played' in data:
-                            piecePlayed = [x for x in data['played'] if x not in self.table]
+                    # Player is asking for a piece 
+                    if 'ask' in data:
+
+                        # Force the loop to stay in the same player if he's asking for piece
+                        i = 0
+
+                        # Little visual input of pieces turned down
+                        tile = '[ : ]'
+                        tiles = []
+                        for x in self.deck:
+                            tiles.append(tile)
+                        print("Tiles: ", tiles)
+
+                        # Check if there are still pieces to give
+                        if len(tiles) > 0 :                       
                             
-                            #piecePlayed = data['played'] - self.table
-                            self.table=data['played']
-                            print("Table ->",self.table)
-                            self.allPlays+= [[player,piecePlayed]]
-                            played = True
+                            # if yes, show him the tiles turned down and wait for him to choose
+                            #print("Sending him msg with 'tiles'")
+                            msg = {'tiles' : tiles}
+                            self.players[player]['conn'].sendall(pickle.dumps(msg))
+                            data = pickle.loads(self.players[player]['conn'].recv(131072))
+                            
+                            #print("Estou a mandar o 'tiles': ",msg)
+                            #print("Aqui o player é suposto mandar choose mas manda: ",data)
 
-                        # Player is asking for a piece 
-                        if 'ask' in data:
-
-                            # Force the loop to stay in the same player if he's asking for piece
-                            i = 0
-
-                            # Little visual input of pieces turned down
-                            tile = '[ : ]'
-                            tiles = []
-                            for x in self.deck:
-                                tiles.append(tile)
-                            print("Tiles: ", tiles)
-
-                            # Check if there are still pieces to give
-                            if len(tiles) > 0 :                       
-                                
-                                # if yes, show him the tiles turned down and wait for him to choose
-                                #print("Sending him msg with 'tiles'")
-                                msg = {'tiles' : tiles}
+                            # Receive message with index
+                            if 'choose' in data:
+                                index =  data['choose']
+                                piece = self.deck.pop(index)
+                                msg = {"piece": piece, "midgamePiece":'midgamePiece'}
                                 self.players[player]['conn'].sendall(pickle.dumps(msg))
+                                print("Piece given after player chose.")
+                                                        
                                 data = pickle.loads(self.players[player]['conn'].recv(131072))
-                                
-                                #print("Estou a mandar o 'tiles': ",msg)
-                                #print("Aqui o player é suposto mandar choose mas manda: ",data)
-
-                                # Receive message with index
-                                if 'choose' in data:
-                                    index =  data['choose']
-                                    piece = self.deck.pop(index)
-                                    msg = {"piece": piece, "midgamePiece":'midgamePiece'}
-                                    self.players[player]['conn'].sendall(pickle.dumps(msg))
-                                    print("Piece given after player chose.")
-                                
-
-                            # if not, tell him there are no pieces left
-                            else:
-                                print('There are no pieces left')
-                                msg = {'notiles' : 'notiles'}
-                                self.players[player]['conn'].sendall(pickle.dumps(msg)) 
-
-                                # Wait for player confirmation to pass                                      
-                                data = pickle.loads(self.players[player]['conn'].recv(131072))
+                                if 'commit' in data:
+                                    self.allCommits.append([player,data['commit']])
+                                    #print("self.allCommits: ",self.allCommits)
+                                    #msg = {"gotCommit": "gotCommit"}
+                                    #self.players[player]['conn'].sendall(pickle.dumps(msg))
                             
-                                if 'pass' in data:
-                                    print("Passed.")
-                                    played = True
-                                    passed=passed+1 
+
+                        # if not, tell him there are no pieces left
+                        else:
+                            print('There are no pieces left')
+                            msg = {'notiles' : 'notiles'}
+                            self.players[player]['conn'].sendall(pickle.dumps(msg)) 
+
+                            # Wait for player confirmation to pass                                      
+                            data = pickle.loads(self.players[player]['conn'].recv(131072))
+                        
+                            if 'pass' in data:
+                                print("Passed.")
+                                played = True
+                                passed=passed+1 
 
                 # We ask the players if everything is fine before we go to the next play to ensure
                 # they have a chance to protest if necessary, or to say something is wrong
@@ -418,6 +440,7 @@ class Server:
                         # Check if someone won
                         if data['gamestate'] == 'iwin':
                             self.winner = each
+                            self.winnerPlayed = data['WhatIPlayed']
 
                         # Check if someone called for cheating
                         elif data['gamestate'] == 'cheat':
@@ -442,6 +465,43 @@ class Server:
                 elif self.winner != None:
                     print("The winner is: ",self.winner)
 
+                    msg = {'giveMePlayed': 'giveMePlayed'}
+                    time.sleep(0.1)
+                    self.players[self.winner]['conn'].sendall(pickle.dumps(msg))
+                    time.sleep(0.1)
+                    
+                    print(data)
+                    print("Cards played by : ", self.winner)
+                    print(self.winnerPlayed)
+
+                    count=0
+                    #Ask for bit commitment thingy
+                    for tile in self.winnerPlayed:
+                        hash_object = SHA256.new(bytes(tile))
+                        hashedTile = hash_object.hexdigest()
+                        #print("Tile: ",tile)
+                        #print("Hashed tile: ",hashedTile)
+                        
+                        #print("Self.allcommits: ",self.allCommits)
+                        for one in self.allCommits:
+                            if self.winner == one[0]:
+                                if(hashedTile in one):
+                                    count = count+1
+                                    print("true")
+                                else: 
+                                    print("false")
+
+                    #print("count: ",count)
+                    #print("length of hand: ",len(self.winnerPlayed))
+                    if count == len(self.winnerPlayed):
+                        print("Bit commitment verifies!")
+
+                    announcement = "The player " + str(self.winner) + " has won the game!"
+                    for aPlayer in self.players:
+                        msg = {'gameOver': announcement}
+                        self.players[aPlayer]['conn'].sendall(pickle.dumps(msg))
+
+
                     #AQUI METE-SE POSSÍVEL GUARDAR DE PONTOS
 
                     print("Congratulations! Game closing.")
@@ -457,7 +517,7 @@ class Server:
                             }
                         }
                     ) 
-                    pprint.pprint(self.games_history) 
+                    #pprint.pprint(self.games_history) 
                     self.winner = None 
                     return "game_won"
 

@@ -17,6 +17,7 @@ from Crypto.Cipher import PKCS1_OAEP
 from OpenSSL import crypto as openssl
 from cryptography.fernet import Fernet
 from base64 import b64encode, b64decode
+from Crypto.Hash import SHA256
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ( padding , rsa , utils)
@@ -36,7 +37,6 @@ class Player:
         self.server_pubkey = None
         self.other_players = [] 
         self.aes_key = None
-        self.bitCommit = []
 
         #Create name
         if len(sys.argv) >= 2:
@@ -46,7 +46,7 @@ class Player:
     
         # Connect to socket
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25567))
+        self.s.connect(('localhost', 25562))
 
         ############################################# BRUNO ##################################################################################
 
@@ -216,7 +216,7 @@ class Player:
         while 1:
             print("\n-----------",self.name,"---------------")
             # Waiting for all the players to connect and the server starts the game
-            print("Waiting...")
+            #print("Waiting...")
             data = pickle.loads(self.s.recv(131072))
           
 
@@ -244,16 +244,22 @@ class Player:
                 self.allkeys = data['player_keys']
                 msg={'GotAllKeys': 'GotAllKeys'}
                 self.s.sendall(pickle.dumps(msg))
-            
-            # Inicial distribution
+                
+
+
+
+            if 'gameOver' in data:
+                print(data['gameOver'])
+
+
             # Decrypt first with players keys and then with server key
             if 'piece' in data:
                 start = time.time()
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
+   
 
-                
-                self.bitCommit.append([data['piece']])
+
                 print("Received a piece:")
                 # AES Fernet Decrypt (Players)
                 cipheredtext = data['piece']
@@ -272,13 +278,18 @@ class Player:
                 finalPiece = json.loads(cipheredtext.decode())
                 self.hand.append(finalPiece)
                 
-                print(finalPiece) 
+                print(finalPiece)
+                
+                hash_object = SHA256.new(bytes(finalPiece))
+                bitCommit = hash_object.hexdigest()
+                    
+                print("bitCommit :",bitCommit) 
 
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
 
                 # Informes server if the piece was correctly received
-                msg = {'gamestate' : 'ok', 'allok' : 'allok'}
+                msg = {'gamestate' : 'ok', 'allok' : 'allok', 'commit':bitCommit}
                 self.s.sendall(pickle.dumps(msg))
                 
                 end = time.time()
@@ -315,10 +326,10 @@ class Player:
                     print("Table ->",self.table)
                     # Winning condition
                     if len(self.hand)==0:
-                        msg={'gamestate': 'iwin'}
+                        msg={'gamestate': 'iwin',"WhatIPlayed": self.played}
                         self.s.sendall(pickle.dumps(msg))
 
-                #print(end - start) # Decyphering time
+            #print(end - start) # Decyphering time
             
             # Game
             if 'play' in data:
@@ -332,7 +343,7 @@ class Player:
                 print("Table ->",self.table)
                 # Winning condition
                 if len(self.hand)==0:
-                    msg={'gamestate': 'iwin'}
+                    msg={'gamestate': 'iwin',"WhatIPlayed": self.played}
                     self.s.sendall(pickle.dumps(msg))
                     print("Winner winner chicken dinner.")
 
@@ -343,6 +354,10 @@ class Player:
                 self.allPlays = data['allPlays']
                 #for each in self.allPlays:
                     #print(each)
+                    
+                if len(self.hand)==0:
+                    msg={'gamestate': 'iwin',"WhatIPlayed": self.played}
+                    self.s.sendall(pickle.dumps(msg))
                 if self.detectCheating() == True:
                     print("Malicious activity detected!")
                     msg = {'gamestate' : 'batota'}
@@ -361,7 +376,10 @@ class Player:
         played=0
         
         if self.table==[]:
-            self.table += [self.hand.pop(random.randint(0,len(self.hand)-1))]
+            piece = [self.hand.pop(random.randint(0,len(self.hand)-1))]
+            self.table += piece
+            self.played.append(piece)
+
         else:
             first=self.table[0][0]
             last=self.table[len(self.table)-1][1]
@@ -434,8 +452,10 @@ class Player:
                 # and appends it to the players hand
                 if 'piece' in data:
                     start = time.time()
-                    print("My hand: ",self.hand)
-                    print("Table ->",self.table)
+                    #print("My hand: ",self.hand)
+                    #print("Table ->",self.table)
+
+                    
 
 
                     # AES Fernat Decrypt (Players)
@@ -458,12 +478,17 @@ class Player:
                     finalPiece = json.loads(cipheredtext.decode())
                     self.hand.append(finalPiece)
 
+                    hash_object = SHA256.new(bytes(finalPiece))
+                    bitCommit = hash_object.hexdigest()
+                    
+                    print("bitCommit :",bitCommit)
+
                     print("Received a piece.")
                     print("My hand: ",self.hand)
-                    print("Table ->",self.table)
+                    #print("Table ->",self.table)
 
                     # Informes server if the piece was correctly received
-                    msg = {'allok': 'allok'}
+                    msg = {'allok': 'allok', 'commit':bitCommit}
                     self.s.sendall(pickle.dumps(msg))
 
                     end = time.time()
