@@ -168,11 +168,9 @@ class Server:
                     # save user 
                     if 'name' in data:
                         try:
-                            print("ola")
                             name = data['name']
                             name_player = name
                             print("Player",name,"connected.")
-                            print(data)
                             self.players[name] = {'conn' : conn, "addr" : addr, "rsa_public" : load_pem_public_key(data['rsa_public'], default_backend())} 
                             self.players[name_player]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                         salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
