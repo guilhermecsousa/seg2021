@@ -5,12 +5,22 @@ import random
 import string
 import pickle
 import crypt
+import platform
 import collections
 import base64
 import json
-from base64 import b64encode, b64decode
-from cryptography.fernet import Fernet
+import Crypto
+import pprint
+from PyKCS11 import *
+from PyKCS11.LowLevel import *
 from Crypto.Cipher import PKCS1_OAEP
+from OpenSSL import crypto as openssl
+from cryptography.fernet import Fernet
+from base64 import b64encode, b64decode
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ( padding , rsa , utils)
+from cryptography.hazmat.primitives.serialization import load_der_public_key, load_pem_private_key, load_pem_public_key
 
 class Player:
   
@@ -20,13 +30,12 @@ class Player:
         self.table=[]
         self.cheating = 0 #0-100%
         self.played=[]
-        self.authenticated = False
         self.allkeys = []
-
-        # Fernet key generation
-        print("Generating symmetric key...")
-        self.key = Fernet.generate_key()
-        print("Done")
+        self.rsa_private = None
+        self.rsa_public = None 
+        self.server_pubkey = None
+        self.other_players = [] 
+        self.aes_key = None
 
         #Create name
         if len(sys.argv) >= 2:
@@ -38,16 +47,168 @@ class Player:
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect(('localhost', 25567))
 
-        # CC Version
-        if self.authenticated:
-            pass
+        ############################################# BRUNO ##################################################################################
 
-        # No CC Version
-        else: 
-            msg = {"name": self.name, "key": self.key}
-            self.s.sendall(pickle.dumps(msg))
-            print("You connected with name",self.name)
+        # GENERATE RSA PUBLIC AND PRIVATE KEYS 
+        self.rsa_private = rsa.generate_private_key(public_exponent=65537, key_size=2048) 
+        self.rsa_public = self.rsa_private.public_key()
+
+        cc = str(input("Use Citizen Card? (y/n)"))  
         
+        if cc == "y":
+        
+            lib = '/usr/local/lib/libpteidpkcs11.so'
+            if  platform.system() == "Darwin":
+                lib = '/usr/local/lib/libpteidpkcs11.dylib'
+        
+            pkcs11 = PyKCS11.PyKCS11Lib() 
+            pkcs11.load(lib)
+            slots = pkcs11.getSlotList()
+            classes = {
+                CKO_PRIVATE_KEY : 'private key', 
+                CKO_PUBLIC_KEY  : 'public key', 
+                CKO_CERTIFICATE : 'certificate'
+            }
+
+            certlist = []
+            
+            for slot in slots:
+                if 'CARTAO DE CIDADAO' in pkcs11.getTokenInfo(slot).label:
+                    session = pkcs11.openSession(slot)
+                    objects = session.findObjects()
+                    
+                    for obj in objects:
+                        l  = session.getAttributeValue(obj, [CKA_LABEL])[0]
+                        c  = session.getAttributeValue(obj, [CKA_CLASS])[0]
+                        cf = session.getAttributeValue(obj, [CKA_VALUE], True)[0]
+                        
+                        if classes[c] == 'certificate':
+                            cert = openssl.load_certificate(openssl.FILETYPE_ASN1, bytes(cf)) # DER-Encoded -> OpenSSL
+                            cert = openssl.dump_certificate(openssl.FILETYPE_PEM, cert) # OpenSSL -> PEM 
+                            certlist += [cert]
+            
+            privKey = session.findObjects( [( CKA_CLASS , CKO_PRIVATE_KEY ) ,( CKA_LABEL , 'CITIZEN AUTHENTICATION KEY' )])[0] 
+
+            msg = {
+                "name": self.name, 
+                "cc_auth" : True, 
+                "certs" : certlist,
+                "rsa_public" : self.rsa_public.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)   
+            }
+            msg.update({"sign" : bytes(session.sign(privKey, pickle.dumps(msg), Mechanism(CKM_SHA1_RSA_PKCS)))}) 
+            self.s.sendall(pickle.dumps(msg))  
+
+            d = []
+            while 1:
+                packet = self.s.recv(4096)
+                d.append(packet)
+                if len(packet) < 4096: break
+            data = pickle.loads(b"".join(d))
+            
+            if "same_auth" in data:
+                print(data['same_auth'])
+                exit()
+            
+            if "verification_failed" in data:
+                print(data['verification_failed'])
+                exit()
+
+            if "cert_not_trusted" in data:
+                print(data["cert_not_trusted"])
+                exit()
+
+            if "server_pubkey" in data:
+                self.server_pubkey = load_pem_public_key(data['server_pubkey'], default_backend())  
+            
+            try:
+                self.server_pubkey.verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                                                         salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256()) 
+            except:
+                print("Signature error: Server is not trusted, exiting...")
+                exit()   
+            
+            #generate AES key. 
+            random_key = Fernet.generate_key() 
+
+            # f = Fernet(random_key)
+            # encrypted = f.encrypt(base64.b64encode(mensagem))
+            # decrypted = f.decrypt(ciphertext)
+            #undecode = base64.b64decode(decrypted)
+
+            msg = {
+                "AESkey" : self.server_pubkey.encrypt(random_key, padding.PKCS1v15())    
+            }
+            msg.update({ 
+                "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                  salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256()) 
+            }) 
+            self.s.sendall(pickle.dumps(msg)) 
+
+            self.aes_key = random_key
+        
+        else :
+            #send RSA to server 
+            msg = {
+                "name": self.name, 
+                "cc_auth" : False,
+                "rsa_public" : self.rsa_public.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)  
+            } 
+            msg.update({
+                "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                  salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256()) 
+            })
+
+            self.s.sendall(pickle.dumps(msg))  
+
+            #receive server RSA 
+            d = []
+            while 1:
+                packet = self.s.recv(4096)
+                d.append(packet)
+                if len(packet) < 4096: break
+            data = pickle.loads(b"".join(d)) 
+            
+            try:
+                if "server_pubkey" in data:
+                    self.server_pubkey = load_pem_public_key(data['server_pubkey'], default_backend())  
+                self.server_pubkey.verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                                                              salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256()) 
+            except:
+                print("Signature error: Server is not trusted, exiting...")
+                exit()
+            
+            #generate AES key. 
+            random_key = Fernet.generate_key() 
+ 
+            #send AES 
+            msg = {
+                "AESkey" : self.server_pubkey.encrypt(random_key, padding.PKCS1v15())  
+            }
+            msg.update({
+                "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                  salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256()) 
+            })
+            self.s.sendall(pickle.dumps(msg))   
+
+            self.aes_key = random_key
+
+        print("You connected with name",self.name)
+
+        #receive data players, name
+        d = []
+        while 1:
+            packet = self.s.recv(4096)
+            d.append(packet)
+            if len(packet) < 4096: break
+        data = pickle.loads(b"".join(d))  
+
+        if 'other_players' in data:
+            self.other_players = data['other_players']
+    
+        print(self.other_players)  
+
+        ##################################################################################################################################################
+
         while 1:
             print("\n-----------",self.name,"---------------")
             # Waiting for all the players to connect and the server starts the game
@@ -61,7 +222,7 @@ class Player:
                 for each in data['deck']:
                    
                     # Fernet AES Encryption
-                    f = Fernet(self.key)
+                    f = Fernet(self.aes_key)
                     encrypted = f.encrypt(each)
                     shuffleDeck += [encrypted]
 
@@ -106,7 +267,7 @@ class Player:
                 finalPiece = json.loads(cipheredtext.decode())
                 self.hand.append(finalPiece)
                 
-                print(finalPiece)
+                print(finalPiece) 
 
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
@@ -309,4 +470,4 @@ class Player:
             return True
         return False
 
-p = Player()
+p = Player() 
