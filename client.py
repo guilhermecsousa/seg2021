@@ -49,8 +49,6 @@ class Player:
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect(('localhost', 25565))
 
-        ############################################# BRUNO ##################################################################################
-
         # GENERATE RSA PUBLIC AND PRIVATE KEYS 
         self.rsa_private = rsa.generate_private_key(public_exponent=65537, key_size=2048) 
         self.rsa_public = self.rsa_private.public_key()
@@ -132,11 +130,6 @@ class Player:
             
             #generate AES key. 
             random_key = Fernet.generate_key() 
-
-            # f = Fernet(random_key)
-            # encrypted = f.encrypt(base64.b64encode(mensagem))
-            # decrypted = f.decrypt(ciphertext)
-            #undecode = base64.b64decode(decrypted)
 
             # send AES key
             msg = {
@@ -223,8 +216,6 @@ class Player:
                 'msg' : 'Hello' 
             }))  
 
-
-        ################################################################################ ##################################################################
 
         while 1:
             print("\n-----------",self.name,"---------------")

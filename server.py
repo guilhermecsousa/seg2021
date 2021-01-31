@@ -63,7 +63,6 @@ class Server:
         self.s.bind(('localhost', 25565))
         print("Waiting for players...\n")
 
-        #################################### BRUNO #############################################################################
         with open('server_privkey.pem', mode='rb') as f:
             key_data = f.read()
             self.privkey = load_pem_private_key(key_data, None, default_backend())
@@ -72,7 +71,6 @@ class Server:
             key_data = f.read()
             self.pubkey = load_pem_public_key(key_data, default_backend()) 
         
-        ########################################################################################################################
     def message(self):
         for name in self.players:
             d = []  
@@ -107,8 +105,6 @@ class Server:
         while 1:
             self.s.listen(1)
             conn, addr = self.s.accept()
-
-            ############################################### BRUNO #########################################################################
 
             # receiving user data
             d = []
@@ -244,7 +240,6 @@ class Server:
                     
                     print("User registed.")    
         
-            #####################################################################################################################################################################################################
             
             # Check if lobby is full
             if len(self.players)==self.nplayers:
