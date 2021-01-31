@@ -215,6 +215,15 @@ class Player:
                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
             except:
                 print("verification other_players FAILED. ")   
+        
+        print(self.other_players) 
+
+        self.s.sendall(pickle.dumps({
+                'to' : self.other_players[random.randrange(0, len(self.other_players))],  
+                'from' : self.name,
+                'msg' : 'ola'
+            }))  
+
 
         ################################################################################ ##################################################################
 
@@ -224,6 +233,8 @@ class Player:
             #print("Waiting...")
             data = pickle.loads(self.s.recv(131072))
           
+            if 'to' in data:
+             print(data)
 
             # Encrypt and shuffle deck 
             if 'shuffleEnc' in data:
@@ -641,4 +652,4 @@ class Player:
             return True
         return False
 
-p = Player() 
+p = Player()  

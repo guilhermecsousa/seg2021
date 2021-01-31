@@ -73,6 +73,24 @@ class Server:
             self.pubkey = load_pem_public_key(key_data, default_backend()) 
         
         ########################################################################################################################
+    def message(self):
+        for name in self.players:
+            d = []  
+            while 1:
+                packet = self.players[name]['conn'].recv(4096)
+                d.append(packet)
+                if len(packet) < 4096: break 
+            data = pickle.loads(b"".join(d))
+
+            print(data)
+
+            # send message.
+            if 'to' in data:
+                self.players[data['to']]['conn'].sendall(pickle.dumps({
+                    'to' : data['to'],
+                    'from' : data['from'],
+                    'msg' : data['msg']
+                }))   
         
     def reset_configs(self):
         self.deck = []    
@@ -235,14 +253,16 @@ class Server:
 
                 # send other_players to every player in game. 
                 for name, values in self.players.items():
-                        list_players = list(self.players.keys())
-                        list_players.remove(name)
-                        msg = {
-                            "other_players" : Fernet(values['aes_key']).encrypt(pickle.dumps(list_players))   
-                        }
-                        msg.update({ "sign" : self.privkey.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
-                                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})
-                        values['conn'].sendall(pickle.dumps(msg))    
+                    list_players = list(self.players.keys())
+                    list_players.remove(name)
+                    msg = {
+                        "other_players" : Fernet(values['aes_key']).encrypt(pickle.dumps(list_players))   
+                    }
+                    msg.update({ "sign" : self.privkey.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                                salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})
+                    values['conn'].sendall(pickle.dumps(msg))    
+                
+                self.message()
 
                 # Create and encrypt pieces
                 for i in range(7):
@@ -291,6 +311,8 @@ class Server:
                     
                     
                     #self.deck = data['deck']                                     
+
+                    
 
                 print("Lobby is full") 
                 break  
