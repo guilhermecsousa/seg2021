@@ -37,6 +37,7 @@ class Player:
         self.server_pubkey = None
         self.other_players = [] 
         self.aes_key = None
+        self.lastBitCommit = None
 
         #Create name
         if len(sys.argv) >= 2:
@@ -46,7 +47,7 @@ class Player:
     
         # Connect to socket
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(('localhost', 25563))
+        self.s.connect(('localhost', 25565))
 
         ############################################# BRUNO ##################################################################################
 
@@ -218,10 +219,11 @@ class Player:
         
         print(self.other_players) 
 
+        # send message to player saying hello
         self.s.sendall(pickle.dumps({
                 'to' : self.other_players[random.randrange(0, len(self.other_players))],  
                 'from' : self.name,
-                'msg' : 'ola'
+                'msg' : 'Hello' 
             }))  
 
 
@@ -330,7 +332,8 @@ class Player:
                 hash_object = SHA256.new(bytes(finalPiece))
                 bitCommit = hash_object.hexdigest()
                     
-                print("bitCommit :",bitCommit) 
+                print("bitCommit :",bitCommit)
+                self.lastBitCommit = bitCommit 
 
                 print("My hand: ",self.hand)
                 print("Table ->",self.table)
@@ -348,53 +351,52 @@ class Player:
                 end = time.time()   
 
             if 'midgamePiece' in data and 'piece' in data:  # ???????????????? not grabe the piece...
-                try:
-                    self.server_pubkey.verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
-                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
-                except: 
-                    print("****************** verification of piece and midgamePiece failed ********************") 
-                first=self.table[0][0]
-                last=self.table[len(self.table)-1][1]
-                for piece in self.hand:
-                    # Game nuances
-                    if piece[0]==first:
-                        self.hand.remove(piece)
-                        self.table=[[piece[1],piece[0]]]+self.table
-                        played=1
-                        self.played.append(piece)
-                    elif piece[1]==first:
-                        self.hand.remove(piece)
-                        self.table=[piece]+self.table
-                        played=1
-                        self.played.append(piece)
-                    elif piece[0]==last:
-                        self.hand.remove(piece)
-                        self.table+=[piece]
-                        played=1
-                        self.played.append(piece)
-                    elif piece[1]==last:
-                        self.hand.remove(piece)
-                        self.table+=[[piece[1],piece[0]]]
-                        played=1
-                        self.played.append(piece)
+                print("ENTROU NO MIDPICE AND DATA")
+                start = time.time()
+                #print("My hand: ",self.hand)
+                #print("Table ->",self.table)
+                # AES Fernat Decrypt (Players)
+                cipheredtext = data['piece']
+                for keys in reversed(self.allkeys[1:]):
+                    print(keys)
+                    f = Fernet(keys)
+                    cleartext = f.decrypt(cipheredtext)
+                    cipheredtext = cleartext
+                    print("CipheredText = ",cipheredtext)  
 
-                msg = {
-                    'played' : Fernet(self.aes_key).encrypt(pickle.dumps(self.table))   
-                } 
-                msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
-                                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})  
-                self.s.sendall(pickle.dumps(msg))  
+                # AES Fernat Decrypt (Server)
+                f = Fernet(self.allkeys[0])
+                cleartext = f.decrypt(cipheredtext)
+                cipheredtext = base64.b64decode(cleartext)
+                cleartext = cleartext.decode()
+                print("Cleartext = ", cleartext)
+                
+                # Appends decrypted piece to players hand
+                finalPiece = json.loads(cipheredtext.decode())
+                print("******************** ADICIONAR A MAO *******************")
+                self.hand.append(finalPiece)
+
+                hash_object = SHA256.new(bytes(finalPiece))
+                bitCommit = hash_object.hexdigest()
+                
+                print("bitCommit :",bitCommit)
+                self.lastBitCommit = bitCommit
+
+                print("Received a piece.")
                 print("My hand: ",self.hand)
-                print("Table ->",self.table)
-                # Winning condition
-                if len(self.hand)==0:
-                    msg={
-                        'gamestate': Fernet(self.aes_key).encrypt(pickle.dumps('iwin')),
-                        "WhatIPlayed" : Fernet(self.aes_key).encrypt(pickle.dumps(self.played))
-                    }
-                    msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
-                                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})  
-                    self.s.sendall(pickle.dumps(msg))   
+                #print("Table ->",self.table)
+
+                # Informes server if the piece was correctly received
+                msg = {
+                    'gamestate' : Fernet(self.aes_key).encrypt(pickle.dumps('ok')), 
+                    'allok': Fernet(self.aes_key).encrypt(pickle.dumps('Player stated the piece was received')), 
+                    'commit' : Fernet(self.aes_key).encrypt(pickle.dumps(bitCommit))
+                }  
+                msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                                salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})  
+                self.s.sendall(pickle.dumps(msg))
+
+                end = time.time()
 
             #print(end - start) # Decyphering time
             
@@ -412,7 +414,8 @@ class Player:
                 print("Table ->",self.table) 
                 self.playPiece()
                 msg = {
-                    'played' : Fernet(self.aes_key).encrypt(pickle.dumps(self.table))   
+                    'played' : Fernet(self.aes_key).encrypt(pickle.dumps(self.table)),
+                    'commit' : self.lastBitCommit   
                 } 
                 msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})  
@@ -535,28 +538,36 @@ class Player:
                 msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})   
                 self.s.sendall(pickle.dumps(msg))     
-
+                print("ASK SENT")
+                
+                time.sleep(0.2) 
                 data = pickle.loads(self.s.recv(131072))  
 
                 #print("Data received after saying 'ask': ", data)
                 
                 # If there is any, choose one
                 if 'tiles' in data:
+                    print("******************TILES RECEIVED*******************") 
                     try:
                         decrypt_tiles1 = pickle.loads(Fernet(self.aes_key).decrypt(data['tiles']))
                         self.server_pubkey.verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256()) 
+                        
+                        #print(decrypt_tiles1)   
                     except:
                         print("*************** verification of tiles faled *******************")
-                    print('Tiles -> ',decrypt_tiles1)
+
+                    print('Tiles -> ',decrypt_tiles1) 
                     index = random.randint(0,len(decrypt_tiles1)-1)
                     msg = {
                         'choose': Fernet(self.aes_key).encrypt(pickle.dumps(index))
                     }
                     msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})   
-                    self.s.sendall(pickle.dumps(msg))
-
+                    time.sleep(0.2)
+                    print("SENT CHOOSE") 
+                    self.s.sendall(pickle.dumps(msg))  
+                    
                 # If it does not exist,
                 if 'notiles' in data:
                     try:
@@ -584,57 +595,7 @@ class Player:
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())}) 
                     self.s.sendall(pickle.dumps(msg))
                     data = pickle.loads(self.s.recv(131072))
-                # When he receives a piece, decrypts it with others players and server public keys 
-                # and appends it to the players hand
-                if 'piece' in data:
-                    start = time.time()
-                    #print("My hand: ",self.hand)
-                    #print("Table ->",self.table)
-
-                    
-
-
-                    # AES Fernat Decrypt (Players)
-                    cipheredtext = data['piece']
-                    for keys in reversed(self.allkeys[1:]):
-                        print(keys)
-                        f = Fernet(keys)
-                        cleartext = f.decrypt(cipheredtext)
-                        cipheredtext = cleartext
-                        print("CipheredText = ",cipheredtext)  
-
-                    # AES Fernat Decrypt (Server)
-                    f = Fernet(self.allkeys[0])
-                    cleartext = f.decrypt(cipheredtext)
-                    cipheredtext = base64.b64decode(cleartext)
-                    cleartext = cleartext.decode()
-                    print("Cleartext = ", cleartext)
-                    
-                    # Appends decrypted piece to players hand
-                    finalPiece = json.loads(cipheredtext.decode())
-                    self.hand.append(finalPiece)
-
-                    hash_object = SHA256.new(bytes(finalPiece))
-                    bitCommit = hash_object.hexdigest()
-                    
-                    print("bitCommit :",bitCommit)
-
-                    print("Received a piece.")
-                    print("My hand: ",self.hand)
-                    #print("Table ->",self.table)
-
-                    # Informes server if the piece was correctly received
-                    msg = {
-                        'gamestate' : Fernet(self.aes_key).encrypt(pickle.dumps('ok')), 
-                        'allok': Fernet(self.aes_key).encrypt(pickle.dumps('Player stated the piece was received')), 
-                        'commit' : Fernet(self.aes_key).encrypt(pickle.dumps(bitCommit))
-                    }  
-                    msg.update({ "sign" : self.rsa_private.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
-                                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})  
-                    self.s.sendall(pickle.dumps(msg))
-
-                    end = time.time()
-                    #print(end - start) # Time to decrypt
+                
                             
     #Function to detect cheating
     def detectCheating(self):       
