@@ -709,7 +709,7 @@ class Server:
                 print("Game Ended")
                 for res in self.players:
                     f = open("account.txt", "a")
-                        f.write("The player "+str(res)+ " scored 3 points\n")
+                        f.write("The player "+str(res)+ " scored 1 point\n")
                         f.close()
                 f = open("account.txt", "a")
                         f.write(" --------------------------------\n")
