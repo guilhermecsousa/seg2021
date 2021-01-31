@@ -666,6 +666,10 @@ class Server:
                         print("Bit commitment verifies!")
                         announcement = "The player " + str(self.winner) + " has won the game!"
 
+                        f = open("account.txt", "a")
+                        f.write("The player "+str(self.winner)+ " scored 3 points\n--------------------------------\n")
+                        f.close()
+
                     else:
                         print("Bit commitment didn't verify")
                         print("The winner cheated!!!")
@@ -703,6 +707,13 @@ class Server:
             if passed==3:
                 print("It's a DRAW")
                 print("Game Ended")
+                for res in self.players:
+                    f = open("account.txt", "a")
+                        f.write("The player "+str(res)+ " scored 3 points\n")
+                        f.close()
+                f = open("account.txt", "a")
+                        f.write(" --------------------------------\n")
+                        f.close()        
                 running = 0
                 return "game_draw"           
 
