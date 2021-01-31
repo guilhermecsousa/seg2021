@@ -82,8 +82,6 @@ class Server:
                 if len(packet) < 4096: break 
             data = pickle.loads(b"".join(d))
 
-            print(data)
-
             # send message.
             if 'to' in data:
                 self.players[data['to']]['conn'].sendall(pickle.dumps({
@@ -201,7 +199,7 @@ class Server:
                             except: 
                                 print("Verification of AESkey failed.")
                         
-                        print("user registed")  
+                        print("User registed.")  
     
                 else :
                     # save user 
@@ -244,7 +242,7 @@ class Server:
                         except:  
                             print("Verification of AESkey failed.")
                     
-                    print("user registed")    
+                    print("User registed.")    
         
             #####################################################################################################################################################################################################
             
@@ -282,7 +280,6 @@ class Server:
 
                 # Going to rotate the deck so that all players can encrypt on top
                 for each in self.players: 
-                    #print(self.deck)
                     #Sending deck                    
                     msg = {
                         'shuffleEnc' : 'shuffleEnc', 
@@ -290,7 +287,7 @@ class Server:
                     }
                     msg.update({ "sign" : self.privkey.sign(pickle.dumps(msg), padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})   
-                    print("Sending send deck to shuffle")
+                    print("Sending deck to shuffle")
                     self.players[each]['conn'].sendall(pickle.dumps(msg))
 
                     #Receiving deck back    
@@ -303,16 +300,10 @@ class Server:
                     try:
                         self.deck = data['deck']
                         print("Deck shuffled and encrypted by: ",each)
-                        #print(decrypted_deck)
                         self.players[each]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
                     except:
                         print("*************** Verification Receiving deck back failed ******************")  
-                    
-                    
-                    #self.deck = data['deck']                                     
-
-                    
 
                 print("Lobby is full") 
                 break  
@@ -320,7 +311,7 @@ class Server:
     # startGame is called after the initial protocols are done
     def startGame(self):
         
-        input("Press a key to START") 
+        input("Press a Enter to START") 
         
 
         # Sends all players the server and players keys to decrypt
@@ -371,7 +362,6 @@ class Server:
                 try:
                     decrypt_allok = pickle.loads(Fernet(self.players[player]['aes_key']).decrypt(data["allok"])) 
                     decrypt_commit = pickle.loads(Fernet(self.players[player]['aes_key']).decrypt(data['commit']))
-                    print(decrypt_allok) 
                     self.players[player]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
                 except: 
@@ -379,13 +369,7 @@ class Server:
             else: 
                 print("Something's wrong with the key distribution")
 
-            self.allCommits.append([player, decrypt_commit])  
-            #print("self.allCommits: ",self.allCommits)
-            print("He commited the following: ", decrypt_commit)
-            #msg = {"gotCommit": "gotCommit"}
-            #self.players[player]['conn'].sendall(pickle.dumps(msg))   
-
-                 
+            self.allCommits.append([player, decrypt_commit])
 
     # Game playing
     def playGame(self):
@@ -397,15 +381,9 @@ class Server:
                                 
             passed=0
             for player in self.players:
-                i=0
-                #while i<1: 
-                i = 1
                 # Given that everything is okay, we keep the game loop
-
                 print("\n-----------------------")
-                #print("Table ->",self.table)
                 print("To play ->",player)
-
 
                 played = False
                 while played == False:
@@ -439,7 +417,14 @@ class Server:
                         piecePlayed = [x for x in decrypted_played if x not in self.table]   
                         
                         if 'commit' in data:
-                            self.allCommits.append([player,data['commit']])   
+                            try:
+                                decrypted_commit = pickle.loads(Fernet(self.players[player]['aes_key']).decrypt(data['commit']))  
+                                self.players[player]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
+                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+                            except:
+                                print("********************** Verification of commit failed ********************") 
+                            
+                            self.allCommits.append([player,decrypted_commit])  
 
                         #piecePlayed = data['played'] - self.table
                         self.table=decrypted_played 
@@ -452,11 +437,8 @@ class Server:
                         try:
                             self.players[player]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
-                            print("ASK RECEIVED") 
                         except:
                             print('**************** verify of ask failed ******************') 
-                        # Force the loop to stay in the same player if he's asking for piece
-                        i = 0
 
                         # Little visual input of pieces turned down
                         tile = '[ : ]'
@@ -469,8 +451,6 @@ class Server:
                         if len(tiles) > 0 :                       
                             
                             # if yes, show him the tiles turned down and wait for him to choose
-                            #print("Sending him msg with 'tiles'")
-                            print(tiles) 
                             msg = {
                                 'tiles' : Fernet(self.players[player]['aes_key']).encrypt(pickle.dumps(tiles))  
                             }
@@ -478,21 +458,17 @@ class Server:
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())}) 
                             #time.sleep(0.2) 
                             self.players[player]['conn'].sendall(pickle.dumps(msg))  
-                            print("*************TILES SENT***************") 
+
                             d = []  
                             while 1:
                                 packet = self.players[player]['conn'].recv(4096) 
                                 d.append(packet)
                                 if len(packet) < 4096: break 
                             data = pickle.loads(b"".join(d))  
-                            
-                            #print("Estou a mandar o 'tiles': ",msg)
-                            #print("Aqui o player é suposto mandar choose mas manda: ",data)
  
                             # Receive message with index 
                             time.sleep(0.2) 
                             if 'choose' in data:
-                                print("CHOOSE RECEIVED") 
                                 try:
                                     decrypted_choose = pickle.loads(Fernet(self.players[player]['aes_key']).decrypt(data['choose']))
                                     
@@ -502,7 +478,6 @@ class Server:
                                 except:
                                     print(' ******************** verify of choose failed *****************')
                                 index =  decrypted_choose
-                                print("INDEX", index)
                                 piece = self.deck.pop(index) 
                                 msg = { 
                                     "piece": piece, 
@@ -519,20 +494,6 @@ class Server:
                                     d.append(packet)
                                     if len(packet) < 4096: break 
                                 data = pickle.loads(b"".join(d))  
-                                
-                                if 'commit' in data:
-                                    try:
-                                        decrypt_commit = pickle.loads(Fernet(self.players[player]['aes_key']).decrypt(data['commit']))
-                                        self.players[player]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
-                                                                    salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
-                                        self.allCommits.append([player,decrypt_commit])   
-
-                                    except:
-                                        print("@@****************** Verification of commit failed ****************")
-                                    #print("self.allCommits: ",self.allCommits)
-                                    #msg = {"gotCommit": "gotCommit"}
-                                    #self.players[player]['conn'].sendall(pickle.dumps(msg))
-                            
 
                         # if not, tell him there are no pieces left
                         else:
@@ -579,7 +540,6 @@ class Server:
                                                                                     salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())})   
                     self.players[each]['conn'].sendall(pickle.dumps(msg)) 
 
-                    #print("Asking if everything is ok to: ",each)
                     data = pickle.loads(self.players[each]['conn'].recv(131072))
 
                     # Players answer with the gamestate, stating if it's ok, if they won or if
@@ -607,7 +567,6 @@ class Server:
                             
                     # Check if ok
                     if 'gamestate' in data and 'test' in data:
-                        print(data)
                         try:
                             decrypt_ok = pickle.loads(Fernet(self.players[player]['aes_key']).decrypt(data["ok"]))
                             self.players[player]['rsa_public'].verify(data['sign'], pickle.dumps({d : data[d] for d in list(data)[:-1]}),   padding.PSS( mgf=padding.MGF1(hashes.SHA256()), 
@@ -615,8 +574,7 @@ class Server:
                         except: 
                             print("******************** Verification of ok failed **********************")    
                     else: 
-                        pass
-                        #print("Nothing happened, which means something went wrong")   
+                        pass 
   
 
                 # If cheating has been called for
@@ -644,24 +602,17 @@ class Server:
                     for tile in self.winnerPlayed:
                         hash_object = SHA256.new(bytes(tile))
                         hashedTile = hash_object.hexdigest()
-                        #print("Tile: ",tile)
-                        #print("Hashed tile: ",hashedTile)
-                        
-                        #print("Self.allcommits: ",self.allCommits)
                         
                         for one in self.allCommits:
                             if self.winner == one[0]:
                                 if(hashedTile in one):
-                                    #print(hashedTile)
                                     count = count+1
                                     break
-                                    #print("true")
                                 else: 
-                                    #print("false")
                                     pass
 
-                    print("count: ",count)
-                    print("length of hand: ",len(self.winnerPlayed))
+                    #print("count: ",count)
+                    #print("length of hand: ",len(self.winnerPlayed))
                     if count == len(self.winnerPlayed):
                         print("Bit commitment verifies!")
                         announcement = "The player " + str(self.winner) + " has won the game!"
@@ -686,7 +637,7 @@ class Server:
 
                     #AQUI METE-SE POSSÍVEL GUARDAR DE PONTOS
 
-                    print("Congratulations! Game closing.")
+                    print(" Game closing.")
                     running = 0
                     self.games_counter = self.games_counter + 1
                     self.games_history.update(
@@ -699,7 +650,6 @@ class Server:
                             }
                         }
                     ) 
-                    #pprint.pprint(self.games_history) 
                     self.winner = None 
                     return "game_won"
 
@@ -709,11 +659,11 @@ class Server:
                 print("Game Ended")
                 for res in self.players:
                     f = open("account.txt", "a")
-                        f.write("The player "+str(res)+ " scored 1 point\n")
-                        f.close()
+                    f.write("The player "+str(res)+ " scored 1 point\n")
+                    f.close()
                 f = open("account.txt", "a")
-                        f.write(" --------------------------------\n")
-                        f.close()        
+                f.write(" --------------------------------\n")
+                f.close()        
                 running = 0
                 return "game_draw"           
 
@@ -725,6 +675,5 @@ while(status_game != "exit_game"):
     sv.auth_players()
     sv.startGame()       
     status_game = sv.playGame()
-    print(status_game) 
     sv.reset_configs()
 self.s.close()   
