@@ -96,7 +96,7 @@ class Player:
                 "certs" : certlist,
                 "rsa_public" : self.rsa_public.public_bytes(encoding=serialization.Encoding.PEM,format=serialization.PublicFormat.SubjectPublicKeyInfo)   
             }
-            msg.update({"sign" : bytes(session.sign(privKey, pickle.dumps(msg), Mechanism(CKM_SHA1_RSA_PKCS)))})  
+            msg.update({"sign" : bytes(session.sign(privKey, pickle.dumps(msg), Mechanism(CKM_SHA1_RSA_PKCS)))})  #Pin asked from CC
             self.s.sendall(pickle.dumps(msg))  
 
             d = []
